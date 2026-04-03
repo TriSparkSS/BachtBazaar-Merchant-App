@@ -1,0 +1,262 @@
+import React, { useState } from 'react';
+import {
+    StyleSheet,
+    Text,
+    View,
+    TouchableOpacity,
+    Image,
+    SafeAreaView,
+    TextInput,
+    ScrollView,
+    Dimensions,
+    Platform
+} from 'react-native';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import Feather from 'react-native-vector-icons/Feather';
+import { colors, fonts, safeTop, screenWidth } from '../../../helpers/styles';
+import { useNavigation } from '@react-navigation/native';
+
+const { width } = Dimensions.get('window');
+
+const EditProfileView = () => {
+    const navigation = useNavigation<any>();
+    
+    // State for fields
+    const [fullName, setFullName] = useState('Aditya Sharma');
+    const [mobileNumber, setMobileNumber] = useState('+91 98765 43210');
+    const [email, setEmail] = useState('aditya.sharma@email.com');
+    const [city, setCity] = useState('Mumbai, Maharashtra');
+    const [gender, setGender] = useState('Male');
+
+    const InputCard = ({ label, value, onChangeText, icon, isLocked = false, isDropdown = false }: any) => (
+        <View style={styles.card}>
+            <View style={styles.iconContainer}>
+                {icon === 'mail' ? (
+                    <Feather name="mail" size={20} color={colors.blue} />
+                ) : icon === 'phone' ? (
+                    <Feather name="smartphone" size={20} color={colors.blue} />
+                ) : icon === 'map-pin' ? (
+                    <Feather name="map-pin" size={20} color={colors.orange} />
+                ) : (
+                    <Feather name="user" size={20} color={isDropdown ? colors.blue : colors.orange} />
+                )}
+            </View>
+            <View style={styles.inputContent}>
+                <Text style={styles.inputLabel}>{label}</Text>
+                <TextInput
+                    style={styles.input}
+                    value={value}
+                    onChangeText={onChangeText}
+                    editable={!isLocked && !isDropdown}
+                    placeholder={`Enter ${label.toLowerCase()}`}
+                />
+            </View>
+            {isLocked && (
+                <Feather name="lock" size={16} color="#CBD5E1" />
+            )}
+            {isDropdown && (
+                <Feather name="chevron-down" size={20} color="#94A3B8" />
+            )}
+        </View>
+    );
+
+    return (
+        <SafeAreaView style={[styles.container, { paddingTop: safeTop }]}>
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <Feather name="arrow-left" size={24} color={colors.darkGray} />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Edit Profile</Text>
+                <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                {/* Profile Image Section */}
+                <View style={styles.avatarSection}>
+                    <View style={styles.avatarWrapper}>
+                        <Image
+                            source={{ uri: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aditya' }}
+                            style={styles.avatar}
+                        />
+                        <TouchableOpacity style={styles.editBadge}>
+                            <MaterialCommunityIcons name="pencil" size={16} color={colors.white} />
+                        </TouchableOpacity>
+                    </View>
+                    <Text style={styles.memberSince}>BachatBazaar Member since 2023</Text>
+                </View>
+
+                {/* Form Fields */}
+                <View style={styles.formContainer}>
+                    <InputCard
+                        label="FULL NAME"
+                        value={fullName}
+                        onChangeText={setFullName}
+                        icon="user-orange"
+                    />
+                    <InputCard
+                        label="MOBILE NUMBER"
+                        value={mobileNumber}
+                        onChangeText={setMobileNumber}
+                        icon="phone"
+                        isLocked={true}
+                    />
+                    <InputCard
+                        label="EMAIL ADDRESS"
+                        value={email}
+                        onChangeText={setEmail}
+                        icon="mail"
+                    />
+                    <InputCard
+                        label="CITY"
+                        value={city}
+                        onChangeText={setCity}
+                        icon="map-pin"
+                    />
+                    <InputCard
+                        label="GENDER"
+                        value={gender}
+                        onChangeText={setGender}
+                        icon="user-blue"
+                        isDropdown={true}
+                    />
+                </View>
+
+                {/* Save Button */}
+                <TouchableOpacity style={styles.saveButton} onPress={() => navigation.navigate('BusinessDocumentation')}>
+                    <View style={styles.checkCircle}>
+                        <MaterialCommunityIcons name="check" size={16} color={colors.orange} />
+                    </View>
+                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                </TouchableOpacity>
+            </ScrollView>
+        </SafeAreaView>
+    );
+};
+
+export default EditProfileView;
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#FBFBFB', // Subtle off-white background
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+    },
+    backButton: {
+        padding: 8,
+    },
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#1B202D',
+    },
+    scrollContent: {
+        paddingBottom: 40,
+    },
+    avatarSection: {
+        alignItems: 'center',
+        marginTop: 20,
+        marginBottom: 30,
+    },
+    avatarWrapper: {
+        position: 'relative',
+    },
+    avatar: {
+        width: 110,
+        height: 110,
+        borderRadius: 55,
+        backgroundColor: '#E2E8F0',
+    },
+    editBadge: {
+        position: 'absolute',
+        bottom: 5,
+        right: 0,
+        backgroundColor: colors.orange,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: colors.white,
+    },
+    memberSince: {
+        marginTop: 15,
+        fontSize: 14,
+        color: '#94A3B8',
+        fontWeight: '500',
+    },
+    formContainer: {
+        paddingHorizontal: 25,
+        gap: 16,
+    },
+    card: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.white,
+        borderRadius: 20,
+        padding: 16,
+        paddingHorizontal: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 12,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+    },
+    iconContainer: {
+        marginRight: 16,
+    },
+    inputContent: {
+        flex: 1,
+    },
+    inputLabel: {
+        fontSize: 10,
+        color: '#94A3B8',
+        fontWeight: '700',
+        marginBottom: 2,
+        letterSpacing: 0.5,
+    },
+    input: {
+        fontSize: 16,
+        color: '#1B202D',
+        fontWeight: '700',
+        padding: 0,
+    },
+    saveButton: {
+        backgroundColor: colors.orange,
+        marginHorizontal: 25,
+        marginTop: 40,
+        height: 60,
+        borderRadius: 30,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: colors.orange,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 15,
+        elevation: 8,
+    },
+    checkCircle: {
+        backgroundColor: colors.white,
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    saveButtonText: {
+        color: colors.white,
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+});

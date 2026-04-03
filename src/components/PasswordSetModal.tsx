@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, Modal, TouchableOpacity, Dimensions, Image } from 'react-native';
+import { StyleSheet, Text, View, Modal, TouchableOpacity, Dimensions, Image, Platform } from 'react-native';
 import { colors } from '../helpers/styles';
 import success from '../assets/icons/success.png';
 import lock from '../assets/icons/lock.png';
@@ -10,9 +10,16 @@ interface PasswordSetModalProps {
     visible: boolean;
     onCompleteProfile: () => void;
     onGoToDashboard: () => void;
+    /** Required on Android for correct Modal behavior (hardware back). */
+    onRequestClose?: () => void;
 }
 
-const PasswordSetModal: React.FC<PasswordSetModalProps> = ({ visible, onCompleteProfile, onGoToDashboard }) => {
+const PasswordSetModal: React.FC<PasswordSetModalProps> = ({
+    visible,
+    onCompleteProfile,
+    onGoToDashboard,
+    onRequestClose,
+}) => {
     const [step, setStep] = useState<'success' | 'next'>('success');
 
     useEffect(() => {
@@ -25,11 +32,17 @@ const PasswordSetModal: React.FC<PasswordSetModalProps> = ({ visible, onComplete
         }
     }, [visible]);
 
+    const handleCompleteProfile = () => onCompleteProfile();
+    const handleGoToDashboard = () => onGoToDashboard();
+
     return (
         <Modal
             transparent
             visible={visible}
             animationType="fade"
+            onRequestClose={onRequestClose ?? (() => undefined)}
+            presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : undefined}
+            statusBarTranslucent={Platform.OS === 'android'}
         >
             <View style={styles.overlay}>
                 <View style={styles.modalCard}>
@@ -61,11 +74,11 @@ const PasswordSetModal: React.FC<PasswordSetModalProps> = ({ visible, onComplete
                                 You're all set. Would you like to view your dashboard or continue completing your business profile?
                             </Text>
 
-                            <TouchableOpacity style={styles.primaryButton} onPress={onCompleteProfile}>
+                            <TouchableOpacity style={styles.primaryButton} onPress={handleCompleteProfile}>
                                 <Text style={styles.primaryButtonText}>Complete Profile</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.secondaryButton} onPress={onGoToDashboard}>
+                            <TouchableOpacity style={styles.secondaryButton} onPress={handleGoToDashboard}>
                                 <Text style={styles.secondaryButtonText}>Go to Dashboard</Text>
                             </TouchableOpacity>
                         </>

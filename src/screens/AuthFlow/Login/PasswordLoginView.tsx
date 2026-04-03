@@ -1,10 +1,20 @@
-import { StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native'
+import { StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, InteractionManager, Platform } from 'react-native'
 import React, { useState } from 'react'
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { colors, screenWidth } from '../../../helpers/styles';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import SuccessModal from '../../../components/SuccessModal';
+import { navigationRef } from '../../../navigation';
+
+/** Defer navigation until after Modal close / layout (avoids failed transitions). */
+const afterModalNavigate = (go: () => void) => {
+    InteractionManager.runAfterInteractions(() => {
+        requestAnimationFrame(() => {
+            setTimeout(go, Platform.OS === 'android' ? 80 : 0);
+        });
+    });
+};
 import CallIcon from '../../../assets/icons/call.svg';
 import DownArrowIcon from '../../../assets/icons/down-arrow.svg';
 import backarrowicon from '../../../assets/icons/backarrow.png'
@@ -129,11 +139,26 @@ const PasswordLoginView = () => {
                 onClose={() => setShowSuccess(false)}
                 onCompleteProfile={() => {
                     setShowSuccess(false);
-                    // Navigate to profile setup
+                    afterModalNavigate(() => {
+                        navigation.dispatch(
+                            CommonActions.reset({
+                                index: 0,
+                                routes: [{ name: 'MerchantOnBoarding' }],
+                            })
+                        );
+                    });
                 }}
                 onGoToDashboard={() => {
                     setShowSuccess(false);
-                    // Navigate to dashboard
+                    afterModalNavigate(() => {
+                        if (!navigationRef.isReady()) return;
+                        navigationRef.dispatch(
+                            CommonActions.reset({
+                                index: 0,
+                                routes: [{ name: 'MainStack' }],
+                            })
+                        );
+                    });
                 }}
             />
         </SafeAreaView>

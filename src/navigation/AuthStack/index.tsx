@@ -21,6 +21,11 @@ export const AuthStack = () => {
             <AuthStackNav.Screen component={screens.VerifyOTP} name='VerifyOTP' />
             <AuthStackNav.Screen component={screens.PasswordLogin} name='PasswordLogin' />
             <AuthStackNav.Screen component={screens.SecureAccount} name='SecureAccount' />
+            <AuthStackNav.Screen component={screens.MerchantOnBoarding} name='MerchantOnBoarding' />
+            <AuthStackNav.Screen component={screens.EditProfile} name='EditProfile' />
+            <AuthStackNav.Screen component={screens.BusinessDocumentation} name='BusinessDocumentation' />
+            <AuthStackNav.Screen component={screens.ShopDetails} name='ShopDetails' />
+            <AuthStackNav.Screen component={screens.FinalizingDetails} name='FinalizingDetails' />
         </AuthStackNav.Navigator>
     )
 };

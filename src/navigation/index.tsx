@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React from 'react';
 import { Alert, BackHandler } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef, StackActions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -73,7 +73,7 @@ export const AppNavigation = () => {
 
 	return (
 		<SafeAreaProvider>
-			<NavigationContainer >
+			<NavigationContainer ref={navigationRef}>
 				<RootStackNav.Navigator
 					screenOptions={{
 						headerShown: false

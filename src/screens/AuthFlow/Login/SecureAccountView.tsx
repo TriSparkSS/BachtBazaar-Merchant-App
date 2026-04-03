@@ -1,11 +1,21 @@
-import { StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native'
+import { StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, InteractionManager, Platform } from 'react-native'
 import React, { useState } from 'react'
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { colors, screenWidth } from '../../../helpers/styles';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { colors, screenWidth, safeTop } from '../../../helpers/styles';
+import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import { PasswordSetModal } from '../../../components';
+import { navigationRef } from '../../../navigation';
 import backarrowicon from '../../../assets/icons/backarrow.png'
+
+/** Run after modal hides — StackActions.replace + Modal timing often fails; reset is reliable. */
+const afterModalNavigate = (go: () => void) => {
+    InteractionManager.runAfterInteractions(() => {
+        requestAnimationFrame(() => {
+            setTimeout(go, Platform.OS === 'android' ? 80 : 0);
+        });
+    });
+};
 
 const SecureAccountView = () => {
     const navigation = useNavigation<any>();
@@ -30,7 +40,7 @@ const SecureAccountView = () => {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={[styles.container, { paddingTop: safeTop }]}>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 {/* Back Button */}
                 <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -128,14 +138,24 @@ const SecureAccountView = () => {
 
             <PasswordSetModal
                 visible={showSuccess}
+                onRequestClose={() => setShowSuccess(false)}
                 onCompleteProfile={() => {
                     setShowSuccess(false);
-                    // Navigate to profile completion if needed
-                    navigation.navigate('Login'); 
+                    afterModalNavigate(() => {
+                        navigation.navigate('MerchantOnBoarding');
+                    });
                 }}
                 onGoToDashboard={() => {
                     setShowSuccess(false);
-                    navigation.navigate('Login');
+                    afterModalNavigate(() => {
+                        if (!navigationRef.isReady()) return;
+                        navigationRef.dispatch(
+                            CommonActions.reset({
+                                index: 0,
+                                routes: [{ name: 'MainStack' }],
+                            })
+                        );
+                    });
                 }}
             />
         </SafeAreaView>

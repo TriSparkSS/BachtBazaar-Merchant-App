@@ -1,507 +1,361 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Switch,
-  Dimensions,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState } from 'react';
+import {
+    StyleSheet,
+    Text,
+    View,
+    TouchableOpacity,
+    ScrollView,
+    SafeAreaView,
+    Dimensions,
+} from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import LinearGradient from 'react-native-linear-gradient';
-import Navbar from '../../../../components/navbar';
-import { colors } from '../../../../helpers/styles';
+import { colors, fonts, safeTop } from '../../../../helpers/styles';
+import { BottomBar } from '../../../../components';
+
+import ProgressRewards from './components/ProgressRewards';
+import HomeTasks from './components/HomeTasks';
+import HomeWidgets from './components/HomeWidgets';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48) / 3 - 8;
-const OFFER_CARD_SIZE = CARD_WIDTH;
+const CARD_WIDTH = (width - 48) / 2;
 
 const HomeScreenView = () => {
-  const [comparePrices, setComparePrices] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState('Hot Deals');
+    const [selectedDay, setSelectedDay] = useState(29);
 
-  const quickActions = [
-    { icon: 'gift', label: 'Daily Rewards', bgColor: colors.pastelYellow },
-    { icon: 'map-marker', label: 'Nearby Coupons', bgColor: colors.pastelPurple },
-    { icon: 'qrcode-scan', label: 'Scan & Save', bgColor: colors.pastelBlue },
-    { icon: 'account-plus', label: 'Invite & Earn', bgColor: colors.pastelGreen },
-    { icon: 'bookmark', label: 'Saved Offers', bgColor: colors.pastelOrange },
-  ];
+    const calendarDays = [
+        { day: 'THU', date: 27, hasOffer: true },
+        { day: 'FRI', date: 28, hasOffer: true },
+        { day: 'SAT', date: 29, hasOffer: false, active: true },
+        { day: 'SUN', date: 30, hasOffer: false },
+        { day: 'MON', date: 31, hasOffer: false },
+    ];
 
-  const categories = [
-    { id: 'Hot Deals', icon: 'fire', label: 'Hot Deals' },
-    { id: 'Jewelry', icon: 'diamond-stone', label: 'Jewelry' },
-    { id: 'Grocery', icon: 'cart', label: 'Grocery' },
-    { id: 'Food', icon: 'food', label: 'Food' },
-  ];
+    const quickActions = [
+        { label: 'Add Offer', icon: 'plus', color: '#FF7D2F', bgColor: '#FFF7ED' },
+        { label: 'Bulk Upload', icon: 'upload-outline', color: '#10B981', bgColor: '#ECFDF5' },
+        { label: 'Customer Journal', icon: 'book-open-outline', color: '#3B82F6', bgColor: '#EFF6FF' },
+        { label: 'My Unlocks', icon: 'lock-open-outline', color: '#10B981', bgColor: '#ECFDF5' },
+    ];
 
-  const offers = [
-    { tag: '10%OFF', title: 'FLAT10%OFF', subtitle: 'on Gold Jewelry', image: null },
-    { tag: 'Buy 1Get 1', title: 'Buy 1Get 1', subtitle: 'on Silver Items', image: null },
-    { tag: 'Free SUFF', title: 'Free Silver', subtitle: 'Polishing', image: null },
-  ];
+    const metrics = [
+        { label: 'Total Views', value: '2,456', trend: '+12%', icon: 'eye-outline', color: '#3B82F6', bgColor: '#EFF6FF' },
+        { label: 'Offer Clicks', value: '987', trend: '+8%', icon: 'cart-outline', color: '#10B981', bgColor: '#ECFDF5' },
+        { label: 'Redeems', value: '342', trend: '+5%', icon: 'ticket-outline', color: '#8B5CF6', bgColor: '#F5F3FF' },
+        { label: 'Store Footfall', value: '156', trend: '+3%', icon: 'walk', color: '#0EA5E9', bgColor: '#F0F9FF' },
+    ];
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <Navbar />
-
-        {/* Mega Sale Countdown */}
-        <View style={styles.countdownHeader}>
-          <View style={styles.countdownLeft}>
-            <MaterialCommunityIcons name="fire" size={18} color={colors.red} />
-            <Text style={styles.countdownLabel}>Mega Sale Starts in</Text>
-          </View>
-          <Text style={styles.countdownTime}>02:12:51</Text>
-        </View>
-
-        {/* Mega Sale Banner */}
-        <LinearGradient
-          colors={[colors.gradientRed, colors.gradientOrange]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.banner}
-        >
-          <View style={styles.bannerContent}>
-            <View style={styles.bannerTextSection}>
-              <Text style={styles.bannerTitle}>50% OFF</Text>
-              <Text style={styles.bannerSubtitle}>Nearby Stores</Text>
-            </View>
-            <View style={styles.bannerCountdown}>
-              <MaterialCommunityIcons name="clock-outline" size={16} color={colors.white} />
-              <Text style={styles.bannerCountdownText}>02:12:51 remaining</Text>
-            </View>
-          </View>
-          <View style={styles.bannerDecorations}>
-            <View style={[styles.giftBox, { backgroundColor: colors.pastelOrange }]} />
-            <View style={[styles.giftBox, { backgroundColor: '#FFCDD2', marginTop: 20 }]} />
-            <View style={[styles.giftBox, { backgroundColor: colors.pastelBlue, marginTop: 10 }]} />
-          </View>
-        </LinearGradient>
-
-        {/* Quick Action Buttons */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.quickActionsScroll}
-          contentContainerStyle={styles.quickActionsContent}
-        >
-          {quickActions.map((action) => (
-            <TouchableOpacity key={action.label} style={styles.quickActionItem}>
-              <View style={[styles.quickActionCircle, { backgroundColor: action.bgColor }]}>
-                <MaterialCommunityIcons
-                  name={action.icon as any}
-                  size={28}
-                  color={colors.darkGray}
-                />
-              </View>
-              <Text style={styles.quickActionLabel}>{action.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Category Filter Pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoriesScroll}
-          contentContainerStyle={styles.categoriesContent}
-        >
-          {categories.map((cat) => (
-            <TouchableOpacity
-              key={cat.id}
-              style={[
-                styles.categoryPill,
-                selectedCategory === cat.id && styles.categoryPillSelected,
-              ]}
-              onPress={() => setSelectedCategory(cat.id)}
-            >
-              <MaterialCommunityIcons
-                name={cat.icon as any}
-                size={18}
-                color={selectedCategory === cat.id ? colors.red : colors.darkGray}
-              />
-              <Text
-                style={[
-                  styles.categoryPillText,
-                  selectedCategory === cat.id && styles.categoryPillTextSelected,
-                ]}
-              >
-                {cat.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Local Offers Section */}
-        <View style={styles.localOffersSection}>
-          <View style={styles.localOffersHeader}>
-            <Text style={styles.localOffersTitle}>Local Offers</Text>
-            <View style={styles.compareRow}>
-              <Text style={styles.compareText}>Compare Prices</Text>
-              <Switch
-                value={comparePrices}
-                onValueChange={setComparePrices}
-                trackColor={{ false: colors.borderGray, true: colors.darkgreen }}
-                thumbColor={colors.white}
-              />
-            </View>
-          </View>
-
-          {/* Store Card - Sharma Jewelers */}
-          <View style={styles.storeCard}>
-            <View style={styles.storeHeader}>
-              <View style={styles.storeImagePlaceholder}>
-                <MaterialCommunityIcons name="store" size={40} color={colors.lightGray} />
-              </View>
-              <View style={styles.storeInfo}>
-                <Text style={styles.storeName}>Sharma Jewelers</Text>
-                <Text style={styles.storeTagline}>Trusted since 1995</Text>
-              </View>
-              <View style={styles.storeMeta}>
-                <View style={styles.ratingRow}>
-                  <MaterialCommunityIcons name="star" size={18} color={colors.yellow} />
-                  <Text style={styles.ratingText}>4.8 (57)</Text>
-                </View>
-                <Text style={styles.distanceText}>0.3km</Text>
-                <TouchableOpacity style={styles.openButton}>
-                  <Text style={styles.openButtonText}>Open</Text>
+    return (
+        <SafeAreaView style={[styles.container, { paddingTop: safeTop }]}>
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity>
+                    <MaterialCommunityIcons name="menu" size={28} color={colors.darkGray} />
                 </TouchableOpacity>
-              </View>
+                <View style={styles.logoRow}>
+                    <Text style={styles.logoText}>BachatBazaar</Text>
+                    <View style={styles.proBadge}>
+                        <Text style={styles.proText}>PRO</Text>
+                    </View>
+                </View>
+                <View style={styles.headerIcons}>
+                    <TouchableOpacity style={styles.iconButton}>
+                        <MaterialCommunityIcons name="chart-bar" size={24} color={colors.darkGray} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.iconButton}>
+                        <MaterialCommunityIcons name="bell-outline" size={24} color={colors.darkGray} />
+                        <View style={styles.dot} />
+                    </TouchableOpacity>
+                </View>
             </View>
 
-            {/* Offer Cards Row */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.offersScroll}
-              contentContainerStyle={styles.offersContent}
-            >
-              {offers.map((offer, index) => (
-                <View key={index} style={styles.offerCard}>
-                  <View style={styles.offerImagePlaceholder}>
-                    <MaterialCommunityIcons
-                      name="diamond-stone"
-                      size={32}
-                      color={colors.lightGray}
-                    />
-                    <View style={styles.offerTagTop}>
-                      <Text style={styles.offerTagText}>{offer.tag}</Text>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                {/* Date & Active Offers Info */}
+                <View style={styles.infoRow}>
+                    <Text style={styles.dateText}>6 Jun, 26</Text>
+                    <View style={styles.activeBadge}>
+                        <Text style={styles.activeText}>2 Active Offers</Text>
                     </View>
-                  </View>
-                  <Text style={styles.offerTitle} numberOfLines={1}>
-                    {offer.title}
-                  </Text>
-                  <Text style={styles.offerSubtitle} numberOfLines={1}>
-                    {offer.subtitle}
-                  </Text>
-                  <View style={styles.offerTagBottom}>
-                    <Text style={styles.offerTagBottomText}>
-                      {offer.tag.length > 6 ? offer.tag.substring(0, 4) : offer.tag}
-                    </Text>
-                  </View>
                 </View>
-              ))}
+
+                {/* Calendar / Offer Cards */}
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.calendarScroll}
+                    contentContainerStyle={styles.calendarContent}
+                >
+                    {calendarDays.map((item, index) => (
+                        <TouchableOpacity
+                            key={index}
+                            style={[
+                                styles.calendarCard,
+                                item.date === selectedDay && styles.calendarCardActive
+                            ]}
+                            onPress={() => setSelectedDay(item.date)}
+                        >
+                            <View style={styles.cardHeader}>
+                                <Text style={[
+                                    styles.dayLabel,
+                                    item.date === selectedDay && styles.textWhite
+                                ]}>{item.day}</Text>
+                                {item.hasOffer && (
+                                    <MaterialCommunityIcons name="lock" size={14} color={item.date === selectedDay ? colors.white : "#D1D5DB"} />
+                                )}
+                            </View>
+                            <Text style={[
+                                styles.dateLabel,
+                                item.date === selectedDay && styles.textWhite
+                            ]}>{item.date}</Text>
+                            
+                            <TouchableOpacity style={styles.addButton}>
+                                <MaterialCommunityIcons 
+                                    name="plus" 
+                                    size={16} 
+                                    color={item.date === selectedDay ? colors.orange : colors.white} 
+                                 />
+                            </TouchableOpacity>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+
+                {/* Quick Actions Grid */}
+                <View style={styles.quickActionsContainer}>
+                    {quickActions.map((action, index) => (
+                        <TouchableOpacity key={index} style={styles.actionItem}>
+                            <View style={[styles.actionIconContainer, { backgroundColor: action.bgColor }]}>
+                                <MaterialCommunityIcons name={action.icon as any} size={28} color={action.color} />
+                            </View>
+                            <Text style={styles.actionLabel}>{action.label}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                {/* Metrics Grid */}
+                <View style={styles.metricsContainer}>
+                    {metrics.map((metric, index) => (
+                        <View key={index} style={styles.metricCard}>
+                            <View style={styles.metricHeader}>
+                                <MaterialCommunityIcons name={metric.icon as any} size={24} color={colors.darkGray} />
+                                <View style={styles.trendRow}>
+                                    <MaterialCommunityIcons name="trending-up" size={16} color="#10B981" />
+                                    <Text style={styles.trendText}>{metric.trend}</Text>
+                                </View>
+                            </View>
+                            <Text style={styles.metricValue}>{metric.value}</Text>
+                            <Text style={styles.metricLabel}>{metric.label}</Text>
+                        </View>
+                    ))}
+                </View>
+
+                {/* New Components */}
+                <ProgressRewards />
+                <HomeTasks />
+                <HomeWidgets />
             </ScrollView>
-          </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
+            
+            <BottomBar activeTab="Home" />
+        </SafeAreaView>
+    );
 };
 
 export default HomeScreenView;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.white,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 100,
-  },
-  countdownHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
-  countdownLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  countdownLabel: {
-    fontSize: 14,
-    color: colors.darkGray,
-    fontWeight: '500',
-  },
-  countdownTime: {
-    fontSize: 14,
-    color: colors.darkGray,
-    fontWeight: '600',
-  },
-  banner: {
-    marginHorizontal: 16,
-    borderRadius: 16,
-    padding: 24,
-    minHeight: 140,
-    marginBottom: 20,
-    overflow: 'hidden',
-  },
-  bannerContent: {
-    flex: 1,
-  },
-  bannerTextSection: {
-    marginBottom: 12,
-  },
-  bannerTitle: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: colors.white,
-  },
-  bannerSubtitle: {
-    fontSize: 18,
-    color: colors.white,
-    opacity: 0.95,
-    marginTop: 4,
-  },
-  bannerCountdown: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-  },
-  bannerCountdownText: {
-    fontSize: 13,
-    color: colors.white,
-    fontWeight: '500',
-  },
-  bannerDecorations: {
-    position: 'absolute',
-    right: 20,
-    top: 20,
-  },
-  giftBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    opacity: 0.9,
-  },
-  quickActionsScroll: {
-    marginBottom: 20,
-  },
-  quickActionsContent: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 16,
-  },
-  quickActionItem: {
-    alignItems: 'center',
-    width: 72,
-  },
-  quickActionCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  quickActionLabel: {
-    fontSize: 12,
-    color: colors.darkGray,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  categoriesScroll: {
-    marginBottom: 20,
-  },
-  categoriesContent: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  categoryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.borderGray,
-    backgroundColor: colors.white,
-    gap: 6,
-  },
-  categoryPillSelected: {
-    backgroundColor: colors.pastelYellow,
-    borderColor: 'transparent',
-  },
-  categoryPillText: {
-    fontSize: 14,
-    color: colors.darkGray,
-    fontWeight: '500',
-  },
-  categoryPillTextSelected: {
-    color: colors.darkGray,
-  },
-  localOffersSection: {
-    paddingHorizontal: 16,
-  },
-  localOffersHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  localOffersTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.darkGray,
-  },
-  compareRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  compareText: {
-    fontSize: 14,
-    color: colors.lightGray,
-  },
-  storeCard: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.borderGray,
-    padding: 16,
-    overflow: 'hidden',
-  },
-  storeHeader: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  storeImagePlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.searchBg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  storeInfo: {
-    flex: 1,
-    marginLeft: 12,
-    justifyContent: 'center',
-  },
-  storeName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.darkGray,
-  },
-  storeTagline: {
-    fontSize: 13,
-    color: colors.lightGray,
-    marginTop: 2,
-  },
-  storeMeta: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  ratingText: {
-    fontSize: 14,
-    color: colors.darkGray,
-    fontWeight: '600',
-  },
-  distanceText: {
-    fontSize: 12,
-    color: colors.lightGray,
-    marginTop: 4,
-  },
-  openButton: {
-    backgroundColor: colors.darkgreen,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  openButtonText: {
-    fontSize: 13,
-    color: colors.white,
-    fontWeight: '600',
-  },
-  offersScroll: {
-    marginHorizontal: -4,
-  },
-  offersContent: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  offerCard: {
-    width: OFFER_CARD_SIZE,
-  },
-  offerImagePlaceholder: {
-    width: OFFER_CARD_SIZE,
-    height: OFFER_CARD_SIZE,
-    borderRadius: 12,
-    backgroundColor: colors.searchBg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  offerTagTop: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: colors.yellow,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  offerTagText: {
-    fontSize: 10,
-    color: colors.darkGray,
-    fontWeight: '700',
-  },
-  offerTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: colors.darkGray,
-  },
-  offerSubtitle: {
-    fontSize: 11,
-    color: colors.lightGray,
-    marginTop: 2,
-  },
-  offerTagBottom: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.yellow,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginTop: 6,
-  },
-  offerTagBottomText: {
-    fontSize: 10,
-    color: colors.darkGray,
-    fontWeight: '700',
-  },
+    container: {
+        flex: 1,
+        backgroundColor: '#FBFBFB',
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+        backgroundColor: '#fff',
+    },
+    logoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    logoText: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: colors.orange,
+    },
+    proBadge: {
+        backgroundColor: '#FFD700',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    proText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: colors.black,
+    },
+    headerIcons: {
+        flexDirection: 'row',
+        gap: 15,
+    },
+    iconButton: {
+        position: 'relative',
+    },
+    dot: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: colors.orange,
+        borderWidth: 1,
+        borderColor: '#fff',
+    },
+    scrollContent: {
+        paddingHorizontal: 16,
+        paddingBottom: 40,
+    },
+    infoRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 20,
+        marginBottom: 15,
+    },
+    dateText: {
+        fontSize: 14,
+        color: colors.lightGray,
+        fontWeight: '500',
+    },
+    activeBadge: {
+        backgroundColor: '#FFF7ED',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 20,
+    },
+    activeText: {
+        fontSize: 12,
+        color: colors.orange,
+        fontWeight: '600',
+    },
+    calendarScroll: {
+        marginBottom: 30,
+    },
+    calendarContent: {
+        paddingVertical: 5,
+        gap: 12,
+    },
+    calendarCard: {
+        width: 80,
+        height: 100,
+        backgroundColor: '#FFF2EB',
+        borderRadius: 16,
+        padding: 12,
+        justifyContent: 'space-between',
+    },
+    calendarCardActive: {
+        backgroundColor: colors.orange,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    dayLabel: {
+        fontSize: 12,
+        color: colors.lightGray,
+        fontWeight: '600',
+    },
+    dateLabel: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: colors.darkGray,
+    },
+    textWhite: {
+        color: '#fff',
+    },
+    addButton: {
+        position: 'absolute',
+        bottom: 8,
+        right: 8,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: colors.orange,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: '#fff',
+    },
+    quickActionsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        marginBottom: 30,
+    },
+    actionItem: {
+        width: '23%',
+        alignItems: 'center',
+    },
+    actionIconContainer: {
+        width: 56,
+        height: 56,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
+    actionLabel: {
+        fontSize: 11,
+        color: colors.darkGray,
+        textAlign: 'center',
+        fontWeight: '600',
+    },
+    metricsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        gap: 16,
+    },
+    metricCard: {
+        width: CARD_WIDTH,
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    metricHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    trendRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    trendText: {
+        fontSize: 12,
+        color: '#10B981',
+        fontWeight: 'bold',
+    },
+    metricValue: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: colors.darkGray,
+        marginBottom: 4,
+    },
+    metricLabel: {
+        fontSize: 13,
+        color: colors.lightGray,
+        fontWeight: '500',
+    },
 });

@@ -30,6 +30,7 @@ export const BottomStack = () => {
 				initialRouteName={'HomeScreen'}
 			>
 				<BottomStackNav.Screen component={Screens.HomeScreen} name='HomeScreen' />
+				<BottomStackNav.Screen component={Screens.ProfileScreen} name='ProfileScreen' />
 			</BottomStackNav.Navigator>
 		</>
 	);

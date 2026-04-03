@@ -8,6 +8,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import CallIcon from '../../../assets/icons/call.svg';
 import DownArrowIcon from '../../../assets/icons/down-arrow.svg';
 
+
 const LoginView = () => {
     const navigation = useNavigation<StackNavigationProp<any>>();
     const [activeTab, setActiveTab] = useState<'Login' | 'Sign-up'>('Login');
