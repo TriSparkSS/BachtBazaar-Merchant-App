@@ -6,7 +6,6 @@ import {
     Text,
     View,
     TouchableOpacity,
-    Image,
     SafeAreaView,
     TextInput,
     ScrollView,
@@ -15,7 +14,7 @@ import {
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import Feather from 'react-native-vector-icons/Feather';
 import { colors, fonts, safeTop, screenWidth } from '../../../helpers/styles';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAppContext } from '../../../context/AppContext';
 import { fetchCategoriesRequest, Category } from '../../../services/merchantApi';
 
@@ -23,6 +22,7 @@ const { width } = Dimensions.get('window');
 
 const ShopDetailsView = () => {
     const navigation = useNavigation<any>();
+    const route = useRoute<any>();
     const { authToken, shopDraft, saveShopDraft, merchant } = useAppContext();
 
     // State for categories
@@ -33,6 +33,10 @@ const ShopDetailsView = () => {
     const [shopAddress, setShopAddress] = useState(shopDraft.address);
     const [city, setCity] = useState(shopDraft.city);
     const [phone, setPhone] = useState(shopDraft.phone || merchant?.phone || '');
+    const [selectedCoordinates, setSelectedCoordinates] = useState<{
+        latitude: number;
+        longitude: number;
+    } | null>(null);
     const [categories, setCategories] = useState<Category[]>([]);
     const [loadingCategories, setLoadingCategories] = useState(false);
 
@@ -65,6 +69,36 @@ const ShopDetailsView = () => {
 
         loadCategories();
     }, [authToken]);
+
+    useEffect(() => {
+        const params = route?.params || {};
+        const selectedAddress = params.selectedAddress;
+        const selectedCity = params.selectedCity;
+        const selectedLatitude = params.selectedLatitude;
+        const selectedLongitude = params.selectedLongitude;
+
+        if (!selectedAddress && !selectedCity) {
+            return;
+        }
+
+        if (selectedAddress) {
+            setShopAddress(selectedAddress);
+        }
+        if (selectedCity) {
+            setCity(selectedCity);
+        }
+        if (typeof selectedLatitude === 'number' && typeof selectedLongitude === 'number') {
+            setSelectedCoordinates({
+                latitude: selectedLatitude,
+                longitude: selectedLongitude,
+            });
+        }
+
+        saveShopDraft({
+            ...(selectedAddress ? { address: selectedAddress } : {}),
+            ...(selectedCity ? { city: selectedCity } : {}),
+        });
+    }, [route?.params?.selectedAddress, route?.params?.selectedCity, route?.params?.selectedLatitude, route?.params?.selectedLongitude]);
 
     const subCategories = ['Fast Food', 'Fine Dining', 'Cafe', 'Bakery', 'Take away'];
 
@@ -192,6 +226,14 @@ const ShopDetailsView = () => {
                     {/* Shop Address Card */}
                     <View style={styles.card}>
                         <Text style={styles.cardLabel}>Shop Address</Text>
+                        <TouchableOpacity
+                            style={styles.mapSelectBtn}
+                            onPress={() => navigation.navigate('MapPicker')}
+                        >
+                            <Feather name="map" size={16} color={colors.orange} />
+                            <Text style={styles.mapSelectText}>Select Address Using Map</Text>
+                        </TouchableOpacity>
+
                         <View style={[styles.inputContainer, { height: 80, alignItems: 'flex-start', paddingTop: 12 }]}>
                             <Feather name="map-pin" size={18} color={colors.lightGray} style={{ marginTop: 2 }} />
                                 <TextInput 
@@ -215,6 +257,12 @@ const ShopDetailsView = () => {
                                 onChangeText={setCity}
                             />
                         </View>
+
+                        {selectedCoordinates ? (
+                            <Text style={styles.coordinatesText}>
+                                Selected on map: {selectedCoordinates.latitude.toFixed(5)}, {selectedCoordinates.longitude.toFixed(5)}
+                            </Text>
+                        ) : null}
                     </View>
 
                     {/* Phone Number Card */}
@@ -238,24 +286,6 @@ const ShopDetailsView = () => {
                         </View>
                     </View>
 
-                    {/* Map Preview */}
-                    <View style={styles.mapContainer}>
-                        <Image 
-                            source={{ uri: 'https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s-l+f50(72.8333,18.9167)/72.8333,18.9167,14,0/600x300?access_token=pk.eyJ1IjoiZXhhbXBsZSIsImEiOiJja2VxaXFiaWcwMjZtMnRzZzZ6ZzZ6ZzZ6In0' }} 
-                            style={styles.mapImage}
-                        />
-                        <View style={styles.mapOverlay}>
-                            <View style={styles.addressBadge}>
-                                <Text style={styles.addressBadgeText}>124, Link Road, Andheri West, Mumbai</Text>
-                            </View>
-                            <View style={styles.pinWrapper}>
-                                <View style={styles.pinCircle}>
-                                    <View style={styles.pinDot} />
-                                </View>
-                                <MaterialCommunityIcons name="map-marker" size={40} color={colors.orange} />
-                            </View>
-                        </View>
-                    </View>
                 </View>
 
                 {/* Footer Button - Needs to be inside ScrollView for the floating look or outside for fixed. Image shows it fixed but reachable. */}
@@ -478,60 +508,27 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: '#1B202D',
     },
-    mapContainer: {
-        height: 180,
-        borderRadius: 16,
-        overflow: 'hidden',
+    mapSelectBtn: {
+        height: 40,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#FDBA74',
+        backgroundColor: '#FFF7ED',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 12,
+    },
+    mapSelectText: {
+        color: '#C2410C',
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    coordinatesText: {
         marginTop: 10,
-        marginBottom: 20,
-    },
-    mapImage: {
-        width: '100%',
-        height: '100%',
-        backgroundColor: '#E2E8F0',
-    },
-    mapOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    addressBadge: {
-        position: 'absolute',
-        top: 20,
-        backgroundColor: colors.white,
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: 6,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    addressBadgeText: {
-        fontSize: 10,
-        fontWeight: '600',
-        color: '#1B202D',
-    },
-    pinWrapper: {
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    pinCircle: {
-        position: 'absolute',
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: 'rgba(249, 115, 22, 0.1)',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    pinDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: colors.orange,
-        marginTop: 20,
+        fontSize: 11,
+        color: colors.lightGray,
     },
     footer: {
         paddingHorizontal: 25,

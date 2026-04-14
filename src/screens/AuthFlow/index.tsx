@@ -8,6 +8,7 @@ import EditProfile from './MerchantOnBoarding/EditProfileView';
 import BusinessDocumentation from './MerchantOnBoarding/BusinessDocumentationView';
 import ShopDetails from './MerchantOnBoarding/ShopDetailsView';
 import FinalizingDetails from './MerchantOnBoarding/FinalizingDetailsView';
+import MapPicker from './MerchantOnBoarding/MapPickerView';
 
 export default {
 	Splash,
@@ -19,5 +20,6 @@ export default {
 	EditProfile,
 	BusinessDocumentation,
 	ShopDetails,
-	FinalizingDetails
+	FinalizingDetails,
+	MapPicker,
 };

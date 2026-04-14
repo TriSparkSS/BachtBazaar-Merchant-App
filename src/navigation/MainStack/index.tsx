@@ -22,6 +22,7 @@ export const MainStack = () => {
             <MainStackNav.Screen component={screens.BusinessDocumentation} name={'BusinessDocumentation'} />
             <MainStackNav.Screen component={screens.ShopDetails} name={'ShopDetails'} />
             <MainStackNav.Screen component={screens.FinalizingDetails} name={'FinalizingDetails'} />
+            <MainStackNav.Screen component={screens.MapPicker} name={'MapPicker'} />
         </MainStackNav.Navigator>
     );
 };
@@ -31,4 +32,3 @@ const styles = StyleSheet.create({
         backgroundColor: colors.white
     }
 });
-

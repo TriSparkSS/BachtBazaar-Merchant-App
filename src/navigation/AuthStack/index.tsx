@@ -26,6 +26,7 @@ export const AuthStack = () => {
             <AuthStackNav.Screen component={screens.BusinessDocumentation} name='BusinessDocumentation' />
             <AuthStackNav.Screen component={screens.ShopDetails} name='ShopDetails' />
             <AuthStackNav.Screen component={screens.FinalizingDetails} name='FinalizingDetails' />
+            <AuthStackNav.Screen component={screens.MapPicker} name='MapPicker' />
         </AuthStackNav.Navigator>
     )
 };
