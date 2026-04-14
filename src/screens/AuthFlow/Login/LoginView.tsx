@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native'
+import { ActivityIndicator, Alert, StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native'
 import React, { useState } from 'react'
 // import Feather from 'react-native-vector-icons/Feather';
 // import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -7,22 +7,61 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import CallIcon from '../../../assets/icons/call.svg';
 import DownArrowIcon from '../../../assets/icons/down-arrow.svg';
+import { sendPhoneOtp } from '../../../services/firebasePhoneAuth';
+import { requestLoginOtp, sendOtpRequest } from '../../../services/authApi';
 
 
 const LoginView = () => {
     const navigation = useNavigation<StackNavigationProp<any>>();
     const [activeTab, setActiveTab] = useState<'Login' | 'Sign-up'>('Login');
     const [phoneNumber, setPhoneNumber] = useState('');
+    const [isSendingOtp, setIsSendingOtp] = useState(false);
 
-    const handleSendOTP = () => {
-        navigation.navigate('VerifyOTP', { 
-            phoneNumber: '+91 ' + phoneNumber,
-            flow: activeTab === 'Sign-up' ? 'signup' : 'login'
-        });
+    const normalizedPhone = phoneNumber.replace(/\D/g, '').slice(-10);
+
+    const handleSendOTP = async () => {
+        try {
+            if (normalizedPhone.length !== 10) {
+                Alert.alert('Invalid phone number', 'Please enter a valid 10-digit mobile number.');
+                return;
+            }
+
+            setIsSendingOtp(true);
+            const otpCheck =
+                activeTab === 'Login'
+                    ? await requestLoginOtp(normalizedPhone)
+                    : await sendOtpRequest(normalizedPhone);
+
+            if (activeTab === 'Login' && !otpCheck.exists) {
+                Alert.alert('Account not found', 'This mobile number is not registered yet. Please sign up first.');
+                return;
+            }
+
+            if (activeTab === 'Sign-up' && otpCheck.exists) {
+                Alert.alert('Account already exists', 'This mobile number is already registered. Please log in instead.');
+                return;
+            }
+
+            const formattedPhoneNumber = await sendPhoneOtp(phoneNumber);
+            navigation.navigate('VerifyOTP', {
+                phoneNumber: formattedPhoneNumber,
+                rawPhoneNumber: normalizedPhone,
+                flow: activeTab === 'Sign-up' ? 'signup' : 'login'
+            });
+        } catch (error: any) {
+            Alert.alert('OTP failed', error?.message || 'Unable to send OTP right now. Please try again.');
+        } finally {
+            setIsSendingOtp(false);
+        }
     };
 
     const handleLoginWithPassword = () => {
-        navigation.navigate('PasswordLogin', { phoneNumber: '+91 ' + phoneNumber });
+        if (normalizedPhone.length !== 10) {
+            Alert.alert('Invalid phone number', 'Please enter a valid 10-digit mobile number.');
+            return;
+        }
+
+        navigation.navigate('PasswordLogin', { phoneNumber: normalizedPhone });
     };
 
     return (
@@ -99,8 +138,16 @@ const LoginView = () => {
                         </View>
 
                         {/* Send OTP Button */}
-                        <TouchableOpacity style={styles.primaryButton} onPress={handleSendOTP}>
-                            <Text style={styles.primaryButtonText}>Send OTP</Text>
+                        <TouchableOpacity
+                            style={[styles.primaryButton, isSendingOtp && styles.disabledButton]}
+                            onPress={handleSendOTP}
+                            disabled={isSendingOtp}
+                        >
+                            {isSendingOtp ? (
+                                <ActivityIndicator color={colors.white} />
+                            ) : (
+                                <Text style={styles.primaryButtonText}>Send OTP</Text>
+                            )}
                         </TouchableOpacity>
 
                         {/* Log in with password Button (Hidden in sign-up) */}
@@ -277,6 +324,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 6,
+    },
+    disabledButton: {
+        opacity: 0.7,
     },
     primaryButtonText: {
         fontSize: 18,

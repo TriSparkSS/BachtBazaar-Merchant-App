@@ -1,10 +1,13 @@
-import { StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Dimensions, InteractionManager, Platform } from 'react-native'
-import React, { useState, useEffect } from 'react'
+import { ActivityIndicator, Alert, StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Dimensions, InteractionManager, Platform } from 'react-native'
+import React, { useRef, useState, useEffect } from 'react'
 import Feather from 'react-native-vector-icons/Feather';
 import { colors, screenWidth } from '../../../helpers/styles';
 import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import SuccessModal from '../../../components/SuccessModal';
 import { navigationRef } from '../../../navigation';
+import { resendPhoneOtp, verifyPhoneOtp } from '../../../services/firebasePhoneAuth';
+import { loginOtpRequest, verifySignupOtpRequest } from '../../../services/authApi';
+import { useAppContext } from '../../../context/AppContext';
 
 /** Defer navigation until after Modal close / layout (avoids failed transitions). */
 const afterModalNavigate = (go: () => void) => {
@@ -19,10 +22,14 @@ const VerifyOTPView = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
     const { phoneNumber, flow } = route.params || {};
+    const { setSession } = useAppContext();
     
-    const [otp, setOtp] = useState(['', '', '', '', '', '']);
+    const [otp, setOtp] = useState('');
     const [timer, setTimer] = useState(45);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [isVerifying, setIsVerifying] = useState(false);
+    const [isResending, setIsResending] = useState(false);
+    const otpInputRef = useRef<TextInput | null>(null);
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -37,18 +44,58 @@ const VerifyOTPView = () => {
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
-    const handleOtpChange = (value: string, index: number) => {
-        const newOtp = [...otp];
-        newOtp[index] = value;
-        setOtp(newOtp);
-        // Add auto-focus logic if needed
+    const handleOtpChange = (value: string) => {
+        const sanitizedValue = value.replace(/\D/g, '').slice(0, 6);
+        setOtp(sanitizedValue);
     };
 
-    const handleVerify = () => {
-        if (flow === 'signup') {
-            navigation.navigate('SecureAccount', { phoneNumber });
-        } else {
+    const handleVerify = async () => {
+        const code = otp;
+
+        if (code.length !== 6) {
+            Alert.alert('Invalid OTP', 'Please enter the 6-digit code sent to your phone.');
+            return;
+        }
+
+        try {
+            setIsVerifying(true);
+            const credential = await verifyPhoneOtp(code);
+            if (!credential) {
+                throw new Error('Unable to verify OTP right now. Please try again.');
+            }
+            const firebaseIdToken = await credential.user.getIdToken(true);
+
+            if (flow === 'signup') {
+                const response = await verifySignupOtpRequest(firebaseIdToken);
+                await setSession(response.token, response.merchant);
+                navigation.navigate('SecureAccount', {
+                    phoneNumber,
+                    merchantId: response.merchant._id,
+                });
+                return;
+            }
+
+            const response = await loginOtpRequest(firebaseIdToken);
+            await setSession(response.token, response.merchant);
+
             setShowSuccess(true);
+        } catch (error: any) {
+            Alert.alert('Verification failed', error?.message || 'The OTP is incorrect or expired. Please try again.');
+        } finally {
+            setIsVerifying(false);
+        }
+    };
+
+    const handleResend = async () => {
+        try {
+            setIsResending(true);
+            await resendPhoneOtp();
+            setOtp('');
+            setTimer(45);
+        } catch (error: any) {
+            Alert.alert('Resend failed', error?.message || 'Unable to resend OTP right now.');
+        } finally {
+            setIsResending(false);
         }
     };
 
@@ -82,29 +129,43 @@ const VerifyOTPView = () => {
 
                 {/* OTP Input Section */}
                 <View style={styles.otpContainer}>
-                    {otp.map((digit, index) => (
-                        <TextInput
+                    <TextInput
+                        ref={otpInputRef}
+                        style={styles.hiddenOtpInput}
+                        keyboardType="number-pad"
+                        value={otp}
+                        onChangeText={handleOtpChange}
+                        maxLength={6}
+                        autoFocus
+                    />
+                    {Array.from({ length: 6 }).map((_, index) => (
+                        <TouchableOpacity
                             key={index}
-                            style={styles.otpInput}
-                            keyboardType="number-pad"
-                            maxLength={1}
-                            value={digit}
-                            onChangeText={(val) => handleOtpChange(val, index)}
-                        />
+                            activeOpacity={0.9}
+                            onPress={() => otpInputRef.current?.focus()}
+                        >
+                            <View style={styles.otpInput}>
+                                <Text style={styles.otpDigit}>{otp[index] || ''}</Text>
+                            </View>
+                        </TouchableOpacity>
                     ))}
                 </View>
 
                 {/* Verify Button */}
-                <TouchableOpacity style={styles.primaryButton} onPress={handleVerify}>
-                    <Text style={styles.primaryButtonText}>Verify</Text>
+                <TouchableOpacity style={styles.primaryButton} onPress={handleVerify} disabled={isVerifying}>
+                    {isVerifying ? (
+                        <ActivityIndicator color={colors.white} />
+                    ) : (
+                        <Text style={styles.primaryButtonText}>Verify</Text>
+                    )}
                 </TouchableOpacity>
 
                 {/* Resend Section */}
                 <View style={styles.resendContainer}>
                     <Text style={styles.resendLabel}>Didn't receive the code?</Text>
-                    <TouchableOpacity disabled={timer > 0}>
+                    <TouchableOpacity disabled={timer > 0 || isResending} onPress={handleResend}>
                         <Text style={[styles.resendText, timer > 0 && styles.timerActive]}>
-                            Resend Code in {formatTime(timer)}
+                            {timer > 0 ? `Resend Code in ${formatTime(timer)}` : isResending ? 'Resending...' : 'Resend Code'}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -216,6 +277,13 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         width: screenWidth * 0.85,
         marginBottom: 40,
+        position: 'relative',
+    },
+    hiddenOtpInput: {
+        position: 'absolute',
+        opacity: 0,
+        width: 1,
+        height: 1,
     },
     otpInput: {
         width: 50,
@@ -227,6 +295,13 @@ const styles = StyleSheet.create({
         fontSize: 24,
         fontWeight: '700',
         backgroundColor: colors.white,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    otpDigit: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: colors.black,
     },
     primaryButton: {
         backgroundColor: colors.orange,

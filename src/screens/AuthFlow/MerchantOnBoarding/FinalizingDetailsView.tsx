@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
+    Platform,
     StyleSheet,
     Text,
     View,
+    ToastAndroid,
     TouchableOpacity,
     Image,
     SafeAreaView,
@@ -15,20 +19,27 @@ import Feather from 'react-native-vector-icons/Feather';
 import { colors, fonts, safeTop } from '../../../helpers/styles';
 import { useNavigation } from '@react-navigation/native';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
+import { useAppContext } from '../../../context/AppContext';
+import { updateMerchantShopRequest } from '../../../services/merchantApi';
 
 const { width } = Dimensions.get('window');
 
 const FinalizingDetailsView = () => {
     const navigation = useNavigation<any>();
+    const { authToken, merchant, shopDraft, storeBrandingDraft, saveStoreBrandingDraft, updateMerchant } = useAppContext();
 
-    const [logo, setLogo] = useState<any>(null);
-    const [banner, setBanner] = useState<any>(null);
-    const [description, setDescription] = useState('');
+    const [logo, setLogo] = useState<any>(storeBrandingDraft.logo);
+    const [banner, setBanner] = useState<any>(storeBrandingDraft.banner);
+    const [description, setDescription] = useState(storeBrandingDraft.description);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const pickLogo = async () => {
         try {
-            const [file] = await pick({ type: [types.images] });
-            setLogo(file);
+            const [file] = await pick({ type: [types.images], copyTo: 'cachesDirectory' });
+            const pickedFile: any = file;
+            const normalizedFile = { ...pickedFile, uri: pickedFile.fileCopyUri || pickedFile.uri };
+            setLogo(normalizedFile);
+            saveStoreBrandingDraft({ logo: normalizedFile });
         } catch (err) {
             if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED) {
                 // Cancelled
@@ -40,14 +51,81 @@ const FinalizingDetailsView = () => {
 
     const pickBanner = async () => {
         try {
-            const [file] = await pick({ type: [types.images] });
-            setBanner(file);
+            const [file] = await pick({ type: [types.images], copyTo: 'cachesDirectory' });
+            const pickedFile: any = file;
+            const normalizedFile = { ...pickedFile, uri: pickedFile.fileCopyUri || pickedFile.uri };
+            setBanner(normalizedFile);
+            saveStoreBrandingDraft({ banner: normalizedFile });
         } catch (err) {
             if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED) {
                 // Cancelled
             } else {
                 throw err;
             }
+        }
+    };
+
+    const handleFinishSetup = async () => {
+        if (!authToken) {
+            Alert.alert('Session expired', 'Please log in again.');
+            return;
+        }
+
+        const normalizedDescription = description.trim();
+        const logoUri = (logo as any)?.uri;
+        const bannerUri = (banner as any)?.uri;
+        const fallbackPhone = shopDraft.phone || merchant?.phone || '';
+
+        if (
+            !shopDraft.shopName ||
+            !shopDraft.categoryId ||
+            !shopDraft.address ||
+            !shopDraft.city ||
+            !fallbackPhone ||
+            !normalizedDescription ||
+            !logoUri ||
+            !bannerUri
+        ) {
+            Alert.alert('Incomplete details', 'Please complete shop details, description, logo image and banner image.');
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+            await saveStoreBrandingDraft({ logo, banner, description: normalizedDescription });
+
+            const response = await updateMerchantShopRequest({
+                token: authToken,
+                shopName: shopDraft.shopName,
+                categoryId: shopDraft.categoryId,
+                address: shopDraft.address,
+                city: shopDraft.city,
+                phone: fallbackPhone,
+                description: normalizedDescription,
+                logoImage: logo,
+                shopBannerImage: banner,
+            });
+
+            if (response?.merchant) {
+                await updateMerchant(response.merchant);
+            }
+
+            if (Platform.OS === 'android') {
+                ToastAndroid.show('Shop setup completed successfully', ToastAndroid.SHORT);
+            } else {
+                Alert.alert('Success', 'Shop setup completed successfully');
+            }
+
+            navigation.navigate('MainStack', {
+                screen: 'BottomStack',
+                params: {
+                    screen: 'ProfileScreen',
+                },
+            });
+        } catch (error: any) {
+            Alert.alert('Shop update failed', error?.message || 'Unable to save shop details right now.');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -210,7 +288,10 @@ const FinalizingDetailsView = () => {
                                 placeholder="Tell your customers about your shop, the products you sell, and your brand story..."
                                 multiline
                                 value={description}
-                                onChangeText={setDescription}
+                                onChangeText={(value) => {
+                                    setDescription(value);
+                                    saveStoreBrandingDraft({ description: value });
+                                }}
                             />
                         </View>
                     </View>
@@ -286,9 +367,14 @@ const FinalizingDetailsView = () => {
             <View style={styles.footer}>
                 <TouchableOpacity 
                     style={styles.finishBtn}
-                    onPress={() => navigation.navigate('MainStack')}
+                    onPress={handleFinishSetup}
+                    disabled={isSubmitting}
                 >
-                    <Text style={styles.finishBtnText}>Finish Setup</Text>
+                    {isSubmitting ? (
+                        <ActivityIndicator color={colors.white} />
+                    ) : (
+                        <Text style={styles.finishBtnText}>Finish Setup</Text>
+                    )}
                 </TouchableOpacity>
                 <Text style={styles.termsText}>By finishing, you agree to our Merchant Terms of Service</Text>
             </View>

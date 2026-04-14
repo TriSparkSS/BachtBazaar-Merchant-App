@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, InteractionManager, Platform } from 'react-native'
+import { ActivityIndicator, Alert, StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, InteractionManager, Platform } from 'react-native'
 import React, { useState } from 'react'
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -18,26 +18,48 @@ const afterModalNavigate = (go: () => void) => {
 import CallIcon from '../../../assets/icons/call.svg';
 import DownArrowIcon from '../../../assets/icons/down-arrow.svg';
 import backarrowicon from '../../../assets/icons/backarrow.png'
+import { loginWithPasswordRequest } from '../../../services/authApi';
+import { useAppContext } from '../../../context/AppContext';
 
 const PasswordLoginView = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
     const { phoneNumber } = route.params || {};
+    const { setSession } = useAppContext();
 
-    const phoneDisplay = phoneNumber ? phoneNumber.split(' ').pop() : '••••• •••••';
+    const phoneDisplay = phoneNumber || '••••• •••••';
 
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
 
     // Requirement checks (Simulated)
     const hasMinLength = password.length >= 8;
     const hasUpperCase = /[A-Z]/.test(password);
     const hasSymbol = /[!@#$%^&*(),.?":{}|<>]/.test(password);
 
-    const handleLogin = () => {
-        // Logic for login...
-        setShowSuccess(true);
+    const handleLogin = async () => {
+        try {
+            if (!phoneNumber) {
+                Alert.alert('Missing phone', 'Please go back and enter your phone number.');
+                return;
+            }
+
+            if (!password) {
+                Alert.alert('Missing password', 'Please enter your password.');
+                return;
+            }
+
+            setIsLoggingIn(true);
+            const response = await loginWithPasswordRequest(phoneNumber, password);
+            await setSession(response.token, response.merchant);
+            setShowSuccess(true);
+        } catch (error: any) {
+            Alert.alert('Login failed', error?.message || 'Unable to log in with password.');
+        } finally {
+            setIsLoggingIn(false);
+        }
     };
 
     return (
@@ -128,8 +150,12 @@ const PasswordLoginView = () => {
                 </View>
 
                 {/* Login Button */}
-                <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
-                    <Text style={styles.primaryButtonText}>Login</Text>
+                <TouchableOpacity style={styles.primaryButton} onPress={handleLogin} disabled={isLoggingIn}>
+                    {isLoggingIn ? (
+                        <ActivityIndicator color={colors.white} />
+                    ) : (
+                        <Text style={styles.primaryButtonText}>Login</Text>
+                    )}
                 </TouchableOpacity>
             </ScrollView>
 

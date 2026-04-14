@@ -7,29 +7,71 @@ import {
     Image,
     SafeAreaView,
     ScrollView,
+    Alert,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import Feather from 'react-native-vector-icons/Feather';
 import { colors, safeTop } from '../../../../helpers/styles';
 import { BottomBar } from '../../../../components';
+import { CommonActions, useNavigation } from '@react-navigation/native';
+import { useAppContext } from '../../../../context/AppContext';
+import { navigationRef } from '../../../../navigation';
+
+const resolveImageUri = (value: any): string | null => {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+    if (typeof value?.uri === 'string') return value.uri;
+    if (typeof value?.url === 'string') return value.url;
+    if (typeof value?.path === 'string') return value.path;
+    return null;
+};
 
 const ProfileScreenView = () => {
+    const navigation = useNavigation<any>();
+    const { merchant, setupProgress, nextSetupRoute, clearSession } = useAppContext();
+
+    const handleLogout = () => {
+        Alert.alert('Logout', 'Are you sure you want to logout from your account?', [
+            {
+                text: 'Cancel',
+                style: 'cancel',
+            },
+            {
+                text: 'Logout',
+                style: 'destructive',
+                onPress: async () => {
+                    await clearSession();
+                    if (!navigationRef.isReady()) {
+                        return;
+                    }
+                    navigationRef.dispatch(
+                        CommonActions.reset({
+                            index: 0,
+                            routes: [{ name: 'AuthFlow' }],
+                        }),
+                    );
+                },
+            },
+        ]);
+    };
+
     const menuItems = [
-        { icon: 'file-document-outline', label: 'Edit Documents' },
-        { icon: 'storefront-outline', label: 'My Store Profile' },
+        { icon: 'file-document-outline', label: 'Edit Documents', onPress: () => navigation.navigate('MerchantOnBoarding') },
+        { icon: 'storefront-outline', label: 'My Store Profile', onPress: () => navigation.navigate('ShopDetails') },
         { icon: 'lock-outline', label: 'Change Password' },
         { icon: 'credit-card-outline', label: 'Manage Payment Methods' },
         { icon: 'earth', label: 'Languages', rightText: 'English' },
         { icon: 'cog-outline', label: 'Settings' },
+        { icon: 'logout', label: 'Logout', onPress: handleLogout, isDanger: true },
     ];
 
-    const MenuItem = ({ icon, label, rightText }: any) => (
-        <TouchableOpacity style={styles.menuItem}>
+    const MenuItem = ({ icon, label, rightText, onPress, isDanger }: any) => (
+        <TouchableOpacity style={styles.menuItem} onPress={onPress}>
             <View style={styles.menuLeft}>
-                <View style={styles.menuIconBox}>
-                    <MaterialCommunityIcons name={icon} size={20} color={colors.darkGray} />
+                <View style={[styles.menuIconBox, isDanger && styles.dangerIconBox]}>
+                    <MaterialCommunityIcons name={icon} size={20} color={isDanger ? '#DC2626' : colors.darkGray} />
                 </View>
-                <Text style={styles.menuLabel}>{label}</Text>
+                <Text style={[styles.menuLabel, isDanger && styles.dangerLabel]}>{label}</Text>
             </View>
             <View style={styles.menuRight}>
                 {rightText && <Text style={styles.rightText}>{rightText}</Text>}
@@ -57,22 +99,22 @@ const ProfileScreenView = () => {
                 <View style={styles.identitySection}>
                     <View style={styles.avatarContainer}>
                         <Image 
-                            source={{ uri: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=400' }} 
+                            source={{ uri: resolveImageUri(merchant?.profileImage) || 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=400' }} 
                             style={styles.avatar} 
                         />
                         <TouchableOpacity style={styles.editBtn}>
                             <MaterialCommunityIcons name="pencil" size={16} color="white" />
                         </TouchableOpacity>
                     </View>
-                    <Text style={styles.email}>aditya.sharma@email.com</Text>
-                    <Text style={styles.phone}>+91 98765 43210</Text>
+                    <Text style={styles.email}>{merchant?.email || merchant?.name || 'Merchant account'}</Text>
+                    <Text style={styles.phone}>{merchant?.phone ? `+91 ${merchant.phone}` : '+91 98765 43210'}</Text>
                 </View>
 
                 {/* Progress Card */}
-                <TouchableOpacity style={styles.progressCard}>
+                <TouchableOpacity style={styles.progressCard} onPress={() => nextSetupRoute && navigation.navigate(nextSetupRoute)}>
                     <View style={styles.circularProgress}>
                         <View style={styles.progressInner}>
-                            <Text style={styles.percentText}>60%</Text>
+                            <Text style={styles.percentText}>{setupProgress}%</Text>
                         </View>
                         {/* Static Progress Border Approximation */}
                         <View style={[styles.progressArc, { borderRightColor: colors.orange, borderTopColor: colors.orange }]} />
@@ -80,7 +122,7 @@ const ProfileScreenView = () => {
                     <View style={styles.progressInfo}>
                         <Text style={styles.progressTitle}>Complete your Profile</Text>
                         <Text style={styles.progressSub} numberOfLines={2}>
-                            Consequat velit qui adipisicing sunt do rependerit ad.
+                            {nextSetupRoute ? 'Continue your merchant and store setup to unlock all features.' : 'Your merchant profile setup is complete.'}
                         </Text>
                     </View>
                     <Feather name="chevron-right" size={24} color={colors.lightGray} />
@@ -271,10 +313,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    dangerIconBox: {
+        backgroundColor: '#FEF2F2',
+    },
     menuLabel: {
         fontSize: 14,
         fontWeight: '700',
         color: '#1B202D',
+    },
+    dangerLabel: {
+        color: '#DC2626',
     },
     menuRight: {
         flexDirection: 'row',

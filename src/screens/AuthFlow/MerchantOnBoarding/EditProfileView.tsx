@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     StyleSheet,
     Text,
     View,
@@ -15,21 +17,103 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import Feather from 'react-native-vector-icons/Feather';
 import { colors, fonts, safeTop, screenWidth } from '../../../helpers/styles';
 import { useNavigation } from '@react-navigation/native';
+import { launchImageLibrary } from 'react-native-image-picker';
+import { useAppContext } from '../../../context/AppContext';
+import { updateMerchantProfileRequest } from '../../../services/merchantApi';
 
 const { width } = Dimensions.get('window');
 
+const resolveImageUri = (value: any): string | null => {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+    if (typeof value?.uri === 'string') return value.uri;
+    if (typeof value?.url === 'string') return value.url;
+    if (typeof value?.path === 'string') return value.path;
+    return null;
+};
+
 const EditProfileView = () => {
     const navigation = useNavigation<any>();
+    const { authToken, merchant, updateMerchant } = useAppContext();
+    const initialProfileImageUri = resolveImageUri(merchant?.profileImage);
     
     // State for fields
-    const [fullName, setFullName] = useState('Aditya Sharma');
-    const [mobileNumber, setMobileNumber] = useState('+91 98765 43210');
-    const [email, setEmail] = useState('aditya.sharma@email.com');
-    const [city, setCity] = useState('Mumbai, Maharashtra');
-    const [gender, setGender] = useState('Male');
+    const [fullName, setFullName] = useState(merchant?.name || '');
+    const [mobileNumber, setMobileNumber] = useState(merchant?.phone || '');
+    const [email, setEmail] = useState(merchant?.email || '');
+    const [city, setCity] = useState(merchant?.city || '');
+    const [gender, setGender] = useState(merchant?.gender || 'Male');
+    const [profileImage, setProfileImage] = useState<any>(
+        initialProfileImageUri ? { uri: initialProfileImageUri } : null
+    );
+    const [isSaving, setIsSaving] = useState(false);
 
-    const InputCard = ({ label, value, onChangeText, icon, isLocked = false, isDropdown = false }: any) => (
-        <View style={styles.card}>
+    const pickProfileImage = async () => {
+        try {
+            const result = await launchImageLibrary({
+                mediaType: 'photo',
+                selectionLimit: 1,
+                quality: 0.6,
+                maxWidth: 1280,
+                maxHeight: 1280,
+                includeBase64: false,
+            });
+
+            const asset = result.assets?.[0];
+            if (!asset?.uri) {
+                return;
+            }
+
+            setProfileImage({
+                uri: asset.uri,
+                type: asset.type || 'image/jpeg',
+                name: asset.fileName || `profile-${Date.now()}.jpg`,
+                fileSize: asset.fileSize,
+            });
+        } catch (err) {
+            Alert.alert('Image failed', 'Unable to select profile image right now.');
+        }
+    };
+
+    const handleSaveChanges = async () => {
+        if (!authToken) {
+            Alert.alert('Session expired', 'Please log in again.');
+            return;
+        }
+
+        if (!fullName || !city || !gender) {
+            Alert.alert('Incomplete profile', 'Please complete full name, city, and gender.');
+            return;
+        }
+
+        const normalizedPhone = mobileNumber.replace(/\D/g, '').slice(-10);
+        if (normalizedPhone.length !== 10) {
+            Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit mobile number.');
+            return;
+        }
+
+        try {
+            setIsSaving(true);
+            const response = await updateMerchantProfileRequest({
+                token: authToken,
+                name: fullName,
+                gender: gender.toLowerCase(),
+                city,
+                phone: normalizedPhone,
+                email,
+                profileImage,
+            });
+            await updateMerchant(response.merchant);
+            navigation.navigate('BusinessDocumentation');
+        } catch (error: any) {
+            Alert.alert('Profile update failed', error?.message || 'Unable to update profile right now.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const InputCard = ({ label, value, onChangeText, icon, isLocked = false, isDropdown = false, onPress }: any) => (
+        <TouchableOpacity style={styles.card} activeOpacity={isDropdown ? 0.8 : 1} onPress={onPress} disabled={!isDropdown}>
             <View style={styles.iconContainer}>
                 {icon === 'mail' ? (
                     <Feather name="mail" size={20} color={colors.blue} />
@@ -57,8 +141,15 @@ const EditProfileView = () => {
             {isDropdown && (
                 <Feather name="chevron-down" size={20} color="#94A3B8" />
             )}
-        </View>
+        </TouchableOpacity>
     );
+
+    const handleGenderPress = () => {
+        const options = ['Male', 'Female', 'Other'];
+        const currentIndex = options.indexOf(gender);
+        const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % options.length;
+        setGender(options[nextIndex]);
+    };
 
     return (
         <SafeAreaView style={[styles.container, { paddingTop: safeTop }]}>
@@ -76,10 +167,10 @@ const EditProfileView = () => {
                 <View style={styles.avatarSection}>
                     <View style={styles.avatarWrapper}>
                         <Image
-                            source={{ uri: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aditya' }}
+                            source={{ uri: resolveImageUri(profileImage) || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aditya' }}
                             style={styles.avatar}
                         />
-                        <TouchableOpacity style={styles.editBadge}>
+                        <TouchableOpacity style={styles.editBadge} onPress={pickProfileImage}>
                             <MaterialCommunityIcons name="pencil" size={16} color={colors.white} />
                         </TouchableOpacity>
                     </View>
@@ -99,7 +190,6 @@ const EditProfileView = () => {
                         value={mobileNumber}
                         onChangeText={setMobileNumber}
                         icon="phone"
-                        isLocked={true}
                     />
                     <InputCard
                         label="EMAIL ADDRESS"
@@ -119,15 +209,22 @@ const EditProfileView = () => {
                         onChangeText={setGender}
                         icon="user-blue"
                         isDropdown={true}
+                        onPress={handleGenderPress}
                     />
                 </View>
 
                 {/* Save Button */}
-                <TouchableOpacity style={styles.saveButton} onPress={() => navigation.navigate('BusinessDocumentation')}>
-                    <View style={styles.checkCircle}>
-                        <MaterialCommunityIcons name="check" size={16} color={colors.orange} />
-                    </View>
-                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                <TouchableOpacity style={styles.saveButton} onPress={handleSaveChanges} disabled={isSaving}>
+                    {isSaving ? (
+                        <ActivityIndicator color={colors.white} />
+                    ) : (
+                        <>
+                            <View style={styles.checkCircle}>
+                                <MaterialCommunityIcons name="check" size={16} color={colors.orange} />
+                            </View>
+                            <Text style={styles.saveButtonText}>Save Changes</Text>
+                        </>
+                    )}
                 </TouchableOpacity>
             </ScrollView>
         </SafeAreaView>

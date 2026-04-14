@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     StyleSheet,
     Text,
     View,
@@ -14,24 +16,55 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import Feather from 'react-native-vector-icons/Feather';
 import { colors, fonts, safeTop, screenWidth } from '../../../helpers/styles';
 import { useNavigation } from '@react-navigation/native';
+import { useAppContext } from '../../../context/AppContext';
+import { fetchCategoriesRequest, Category } from '../../../services/merchantApi';
 
 const { width } = Dimensions.get('window');
 
 const ShopDetailsView = () => {
     const navigation = useNavigation<any>();
+    const { authToken, shopDraft, saveShopDraft, merchant } = useAppContext();
 
     // State for categories
-    const [selectedCategory, setSelectedCategory] = useState('Restaurant');
-    const [selectedSubCategory, setSelectedSubCategory] = useState('Fast Food');
+    const [selectedCategory, setSelectedCategory] = useState(shopDraft.category);
+    const [selectedCategoryId, setSelectedCategoryId] = useState(shopDraft.categoryId);
+    const [selectedSubCategory, setSelectedSubCategory] = useState(shopDraft.subCategory);
+    const [shopName, setShopName] = useState(shopDraft.shopName);
+    const [shopAddress, setShopAddress] = useState(shopDraft.address);
+    const [city, setCity] = useState(shopDraft.city);
+    const [phone, setPhone] = useState(shopDraft.phone || merchant?.phone || '');
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [loadingCategories, setLoadingCategories] = useState(false);
 
-    const categories = [
-        { id: 'res', name: 'Restaurant', icon: 'silverware-fork-knife', color: '#FFF7ED', textColor: '#EA580C', borderColor: '#FB923C' },
-        { id: 'clo', name: 'Clothing', icon: 'tshirt-crew-outline', color: '#F0FDF4', textColor: '#166534', borderColor: '#86EFAC' },
-        { id: 'sal', name: 'Salon', icon: 'content-cut', color: '#FAF5FF', textColor: '#7E22CE', borderColor: '#D8B4FE' },
-        { id: 'gro', name: 'Grocery', icon: 'basket-outline', color: '#EFF6FF', textColor: '#1E40AF', borderColor: '#93C5FD' },
-        { id: 'ele', name: 'Electronics', icon: 'laptop', color: '#FEF2F2', textColor: '#991B1B', borderColor: '#FCA5A5' },
-        { id: 'pha', name: 'Pharmacy', icon: 'medical-bag', color: '#FFFBEB', textColor: '#92400E', borderColor: '#FDE68A' },
-    ];
+    useEffect(() => {
+        const loadCategories = async () => {
+            if (!authToken) {
+                return;
+            }
+
+            try {
+                setLoadingCategories(true);
+                const response = await fetchCategoriesRequest(authToken);
+                setCategories(response.categories || []);
+
+                if (!selectedCategoryId && response.categories?.length) {
+                    const first = response.categories[0];
+                    setSelectedCategory(first.label);
+                    setSelectedCategoryId(first._id);
+                    await saveShopDraft({
+                        category: first.label,
+                        categoryId: first._id,
+                    });
+                }
+            } catch (error: any) {
+                Alert.alert('Category error', error?.message || 'Unable to load categories right now.');
+            } finally {
+                setLoadingCategories(false);
+            }
+        };
+
+        loadCategories();
+    }, [authToken]);
 
     const subCategories = ['Fast Food', 'Fine Dining', 'Cafe', 'Bakery', 'Take away'];
 
@@ -98,27 +131,44 @@ const ShopDetailsView = () => {
                         <Text style={styles.cardLabel}>Shop Name</Text>
                         <View style={styles.inputContainer}>
                             <MaterialCommunityIcons name="storefront-outline" size={20} color={colors.lightGray} />
-                            <TextInput 
-                                style={styles.input} 
-                                placeholder="e.g. BachtBazaar Express"
-                                placeholderTextColor="#94A3B8"
-                            />
+                                <TextInput 
+                                    style={styles.input} 
+                                    placeholder="e.g. BachtBazaar Express"
+                                    placeholderTextColor="#94A3B8"
+                                    value={shopName}
+                                    onChangeText={setShopName}
+                                />
                         </View>
                     </View>
 
                     {/* Category Selection Card */}
                     <View style={styles.card}>
                         <Text style={styles.cardLabel}>Category</Text>
-                        <View style={styles.tagsGrid}>
-                            {categories.map((cat) => (
-                                <Tag 
-                                    key={cat.id}
-                                    {...cat}
-                                    isSelected={selectedCategory === cat.name}
-                                    onPress={() => setSelectedCategory(cat.name)}
-                                />
-                            ))}
-                        </View>
+                        {loadingCategories ? (
+                            <View style={styles.categoryLoader}>
+                                <ActivityIndicator color={colors.orange} />
+                                <Text style={styles.categoryLoaderText}>Loading categories...</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.tagsGrid}>
+                                {categories.map((cat) => (
+                                    <Tag 
+                                        key={cat._id}
+                                        name={cat.label}
+                                        icon="shape-outline"
+                                        color={selectedCategoryId === cat._id ? '#FFF7ED' : '#F8FAFC'}
+                                        textColor={selectedCategoryId === cat._id ? '#EA580C' : '#475569'}
+                                        borderColor={selectedCategoryId === cat._id ? '#FB923C' : '#E2E8F0'}
+                                        isSelected={selectedCategoryId === cat._id}
+                                        onPress={() => {
+                                            setSelectedCategory(cat.label);
+                                            setSelectedCategoryId(cat._id);
+                                            saveShopDraft({ category: cat.label, categoryId: cat._id });
+                                        }}
+                                    />
+                                ))}
+                            </View>
+                        )}
                     </View>
 
                     {/* Sub Category Selection Card */}
@@ -130,7 +180,10 @@ const ShopDetailsView = () => {
                                     key={sub}
                                     name={sub}
                                     isSelected={selectedSubCategory === sub}
-                                    onPress={() => setSelectedSubCategory(sub)}
+                                    onPress={() => {
+                                        setSelectedSubCategory(sub);
+                                        saveShopDraft({ subCategory: sub });
+                                    }}
                                 />
                             ))}
                         </View>
@@ -141,19 +194,26 @@ const ShopDetailsView = () => {
                         <Text style={styles.cardLabel}>Shop Address</Text>
                         <View style={[styles.inputContainer, { height: 80, alignItems: 'flex-start', paddingTop: 12 }]}>
                             <Feather name="map-pin" size={18} color={colors.lightGray} style={{ marginTop: 2 }} />
-                            <TextInput 
-                                style={[styles.input, { textAlignVertical: 'top' }]} 
-                                placeholder="Street name, building number..."
-                                placeholderTextColor="#94A3B8"
-                                multiline
-                            />
+                                <TextInput 
+                                    style={[styles.input, { textAlignVertical: 'top' }]} 
+                                    placeholder="Street name, building number..."
+                                    placeholderTextColor="#94A3B8"
+                                    multiline
+                                    value={shopAddress}
+                                    onChangeText={setShopAddress}
+                                />
                         </View>
 
                         <Text style={[styles.cardLabel, { marginTop: 15 }]}>City</Text>
                         <View style={styles.inputContainer}>
                             <MaterialCommunityIcons name="bank-outline" size={20} color={colors.lightGray} />
-                            <Text style={styles.dropdownText}>Select City</Text>
-                            <Feather name="chevron-down" size={20} color={colors.lightGray} />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Select City"
+                                placeholderTextColor="#94A3B8"
+                                value={city}
+                                onChangeText={setCity}
+                            />
                         </View>
                     </View>
 
@@ -171,6 +231,8 @@ const ShopDetailsView = () => {
                                     placeholder="98765 43210"
                                     placeholderTextColor="#94A3B8"
                                     keyboardType="numeric"
+                                    value={phone}
+                                    onChangeText={setPhone}
                                 />
                             </View>
                         </View>
@@ -204,7 +266,24 @@ const ShopDetailsView = () => {
             <View style={styles.footer}>
                 <TouchableOpacity 
                     style={styles.continueButton}
-                    onPress={() => navigation.navigate('FinalizingDetails')}
+                    onPress={async () => {
+                        const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
+                        if (!shopName || !selectedCategoryId || !shopAddress || !city || normalizedPhone.length !== 10) {
+                            Alert.alert('Incomplete details', 'Please fill shop name, category, address, city, and valid phone number.');
+                            return;
+                        }
+
+                        await saveShopDraft({
+                            shopName,
+                            categoryId: selectedCategoryId,
+                            category: selectedCategory,
+                            subCategory: selectedSubCategory,
+                            address: shopAddress,
+                            city,
+                            phone: normalizedPhone,
+                        });
+                        navigation.navigate('FinalizingDetails');
+                    }}
                 >
                     <Text style={styles.continueButtonText}>Continue to Final Step</Text>
                     <Feather name="arrow-right" size={20} color={colors.white} />
@@ -328,6 +407,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 10,
+    },
+    categoryLoader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 8,
+    },
+    categoryLoaderText: {
+        fontSize: 13,
+        color: colors.lightGray,
     },
     tag: {
         flexDirection: 'row',

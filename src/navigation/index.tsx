@@ -1,10 +1,12 @@
 import React from 'react';
-import { Alert, BackHandler } from 'react-native';
+import { Alert, ActivityIndicator, BackHandler, View } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef, StackActions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthStack } from './AuthStack';
 import { MainStack } from './MainStack';
+import { useAppContext } from '../context/AppContext';
+import { colors } from '../helpers/styles';
 
 
 export const navigationRef = createNavigationContainerRef();
@@ -70,6 +72,17 @@ export function goBack() {
 const RootStackNav = createStackNavigator();
 
 export const AppNavigation = () => {
+	const { authToken, isHydrated } = useAppContext();
+
+	if (!isHydrated) {
+		return (
+			<SafeAreaProvider>
+				<View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white }}>
+					<ActivityIndicator size="large" color={colors.orange} />
+				</View>
+			</SafeAreaProvider>
+		);
+	}
 
 	return (
 		<SafeAreaProvider>
@@ -78,7 +91,7 @@ export const AppNavigation = () => {
 					screenOptions={{
 						headerShown: false
 					}}
-					initialRouteName={'AuthFlow'}
+					initialRouteName={authToken ? 'MainStack' : 'AuthFlow'}
 				>
 					<RootStackNav.Screen component={AuthStack} name={'AuthFlow'} />
 					<RootStackNav.Screen component={MainStack} name={'MainStack'} />

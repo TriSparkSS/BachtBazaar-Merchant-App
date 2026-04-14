@@ -3,6 +3,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { StyleSheet } from 'react-native';
 import { colors } from '../../helpers/styles';
 import { BottomStack } from './BottomStack';
+import screens from '../../screens';
 
 const MainStackNav = createStackNavigator();
 
@@ -16,7 +17,11 @@ export const MainStack = () => {
             initialRouteName={'BottomStack'}
         >
             <MainStackNav.Screen component={BottomStack} name={'BottomStack'} />
-        
+            <MainStackNav.Screen component={screens.MerchantOnBoarding} name={'MerchantOnBoarding'} />
+            <MainStackNav.Screen component={screens.EditProfile} name={'EditProfile'} />
+            <MainStackNav.Screen component={screens.BusinessDocumentation} name={'BusinessDocumentation'} />
+            <MainStackNav.Screen component={screens.ShopDetails} name={'ShopDetails'} />
+            <MainStackNav.Screen component={screens.FinalizingDetails} name={'FinalizingDetails'} />
         </MainStackNav.Navigator>
     );
 };
@@ -26,5 +31,4 @@ const styles = StyleSheet.create({
         backgroundColor: colors.white
     }
 });
-
 

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     StyleSheet,
     Text,
     View,
@@ -15,27 +17,87 @@ import { colors, fonts, safeTop } from '../../../helpers/styles';
 import backarrowicon from '../../../assets/icons/backarrow.png';
 import { useNavigation } from '@react-navigation/native';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
+import { uploadMerchantDocumentsRequest } from '../../../services/merchantApi';
+import { useAppContext } from '../../../context/AppContext';
 
 const { width } = Dimensions.get('window');
 
 const MarchantOnBoarding = () => {
     const navigation = useNavigation<any>();
-    const [documentType, setDocumentType] = useState('Aadhaar'); // 'Aadhaar' or 'PAN'
-    const [documentNumber, setDocumentNumber] = useState('');
-    const [selectedFile, setSelectedFile] = useState<any>(null);
+    const { authToken, personalDocumentDraft, savePersonalDocumentDraft } = useAppContext();
+    const [documentType, setDocumentType] = useState(personalDocumentDraft.documentType); // 'Aadhaar' or 'PAN'
+    const [documentNumber, setDocumentNumber] = useState(personalDocumentDraft.documentNumber);
+    const [selectedFile, setSelectedFile] = useState<any>(personalDocumentDraft.documentFile);
+    const [panName, setPanName] = useState(personalDocumentDraft.panName || '');
+    const [dob, setDob] = useState(personalDocumentDraft.dob || '');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const pickDocument = async () => {
         try {
             const [file] = await pick({
                 type: [types.images, types.pdf],
+                copyTo: 'cachesDirectory',
             });
-            setSelectedFile(file);
+            const pickedFile: any = file;
+
+            const normalizedFile = {
+                ...pickedFile,
+                uri: pickedFile.fileCopyUri || pickedFile.uri,
+            };
+
+            setSelectedFile(normalizedFile);
+            savePersonalDocumentDraft({ documentFile: normalizedFile });
         } catch (err) {
             if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED) {
                 // User cancelled the picker
             } else {
                 throw err;
             }
+        }
+    };
+
+    const handleContinue = async () => {
+        if (!authToken) {
+            Alert.alert('Session expired', 'Please login again to continue onboarding.');
+            return;
+        }
+
+        if (!documentNumber || !selectedFile?.uri) {
+            Alert.alert('Incomplete details', 'Please enter document number and upload a document image.');
+            return;
+        }
+
+        if (documentType === 'PAN' && (!panName || !dob)) {
+            Alert.alert('Incomplete PAN details', 'Please enter PAN holder name and date of birth.');
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+            const response = await uploadMerchantDocumentsRequest({
+                token: authToken,
+                documentType: documentType as 'Aadhaar' | 'PAN',
+                documentNumber,
+                documentFile: selectedFile,
+                panName,
+                dob,
+            });
+
+            await savePersonalDocumentDraft({
+                documentType: documentType as 'Aadhaar' | 'PAN',
+                documentNumber,
+                documentFile: selectedFile,
+                panName,
+                dob,
+                uploaded: true,
+                kycStatus: response.kycStatus,
+            });
+
+            navigation.navigate('EditProfile');
+        } catch (error: any) {
+            Alert.alert('Upload failed', error?.message || 'Unable to upload personal documents right now.');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -86,7 +148,10 @@ const MarchantOnBoarding = () => {
                                     styles.radioButton,
                                     documentType === 'Aadhaar' && styles.radioActive
                                 ]}
-                                onPress={() => setDocumentType('Aadhaar')}
+                                onPress={() => {
+                                    setDocumentType('Aadhaar');
+                                    savePersonalDocumentDraft({ documentType: 'Aadhaar' });
+                                }}
                             >
                                 <MaterialCommunityIcons
                                     name={documentType === 'Aadhaar' ? "radiobox-marked" : "radiobox-blank"}
@@ -104,7 +169,10 @@ const MarchantOnBoarding = () => {
                                     styles.radioButton,
                                     documentType === 'PAN' && styles.radioActive
                                 ]}
-                                onPress={() => setDocumentType('PAN')}
+                                onPress={() => {
+                                    setDocumentType('PAN');
+                                    savePersonalDocumentDraft({ documentType: 'PAN' });
+                                }}
                             >
                                 <MaterialCommunityIcons
                                     name={documentType === 'PAN' ? "radiobox-marked" : "radiobox-blank"}
@@ -118,18 +186,56 @@ const MarchantOnBoarding = () => {
                             </TouchableOpacity>
                         </View>
 
-                        <Text style={styles.inputLabel}>Document Number</Text>
+                        <Text style={styles.inputLabel}>{documentType === 'Aadhaar' ? 'Aadhaar Number' : 'PAN Number'}</Text>
                         <View style={styles.inputContainer}>
                             <MaterialCommunityIcons name="card-account-details-outline" size={22} color={colors.lightGray} />
                             <TextInput
                                 style={styles.input}
-                                placeholder="XXXX-XXXX-XXXX-XXXX"
+                                placeholder={documentType === 'Aadhaar' ? '123412341234' : 'ABCDE1234F'}
                                 placeholderTextColor={colors.lighterGray}
                                 value={documentNumber}
-                                onChangeText={setDocumentNumber}
-                                keyboardType="numeric"
+                                onChangeText={(value) => {
+                                    setDocumentNumber(value);
+                                    savePersonalDocumentDraft({ documentNumber: value });
+                                }}
+                                keyboardType={documentType === 'Aadhaar' ? 'numeric' : 'default'}
+                                autoCapitalize={documentType === 'PAN' ? 'characters' : 'none'}
                             />
                         </View>
+
+                        {documentType === 'PAN' && (
+                            <>
+                                <Text style={styles.inputLabel}>PAN Holder Name</Text>
+                                <View style={styles.inputContainer}>
+                                    <MaterialCommunityIcons name="account-outline" size={22} color={colors.lightGray} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Enter name as per PAN"
+                                        placeholderTextColor={colors.lighterGray}
+                                        value={panName}
+                                        onChangeText={(value) => {
+                                            setPanName(value);
+                                            savePersonalDocumentDraft({ panName: value });
+                                        }}
+                                    />
+                                </View>
+
+                                <Text style={styles.inputLabel}>Date of Birth</Text>
+                                <View style={styles.inputContainer}>
+                                    <MaterialCommunityIcons name="calendar-month-outline" size={22} color={colors.lightGray} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="YYYY-MM-DD"
+                                        placeholderTextColor={colors.lighterGray}
+                                        value={dob}
+                                        onChangeText={(value) => {
+                                            setDob(value);
+                                            savePersonalDocumentDraft({ dob: value });
+                                        }}
+                                    />
+                                </View>
+                            </>
+                        )}
 
                         <Text style={styles.inputLabel}>Upload Document Image</Text>
                         <TouchableOpacity style={styles.uploadBox} onPress={pickDocument}>
@@ -156,9 +262,15 @@ const MarchantOnBoarding = () => {
                 <TouchableOpacity style={styles.draftButton}>
                     <Text style={styles.draftButtonText}>Save Draft</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.continueButton} onPress={() => navigation.navigate('EditProfile')}>
-                    <Text style={styles.continueButtonText}>Continue</Text>
-                    <MaterialCommunityIcons name="arrow-right" size={20} color={colors.white} />
+                <TouchableOpacity style={styles.continueButton} onPress={handleContinue} disabled={isSubmitting}>
+                    {isSubmitting ? (
+                        <ActivityIndicator color={colors.white} />
+                    ) : (
+                        <>
+                            <Text style={styles.continueButtonText}>Continue</Text>
+                            <MaterialCommunityIcons name="arrow-right" size={20} color={colors.white} />
+                        </>
+                    )}
                 </TouchableOpacity>
             </View>
         </SafeAreaView>

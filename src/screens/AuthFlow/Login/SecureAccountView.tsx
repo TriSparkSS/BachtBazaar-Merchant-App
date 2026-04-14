@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, InteractionManager, Platform } from 'react-native'
+import { ActivityIndicator, Alert, StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, InteractionManager, Platform } from 'react-native'
 import React, { useState } from 'react'
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -7,6 +7,8 @@ import { useNavigation, useRoute, CommonActions } from '@react-navigation/native
 import { PasswordSetModal } from '../../../components';
 import { navigationRef } from '../../../navigation';
 import backarrowicon from '../../../assets/icons/backarrow.png'
+import { setPasswordRequest } from '../../../services/authApi';
+import { useAppContext } from '../../../context/AppContext';
 
 /** Run after modal hides — StackActions.replace + Modal timing often fails; reset is reliable. */
 const afterModalNavigate = (go: () => void) => {
@@ -20,22 +22,47 @@ const afterModalNavigate = (go: () => void) => {
 const SecureAccountView = () => {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
-    const { phoneNumber } = route.params || {};
+    const { merchantId } = route.params || {};
+    const { merchant } = useAppContext();
 
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Requirement checks
     const hasMinLength = password.length >= 8;
     const hasUpperCase = /[A-Z]/.test(password);
     const hasSymbol = /[!@#$%^&*(),.?":{}|<>]/.test(password);
 
-    const handleSetPassword = () => {
-        if (password === confirmPassword && hasMinLength && hasUpperCase && hasSymbol) {
+    const handleSetPassword = async () => {
+        if (password !== confirmPassword) {
+            Alert.alert('Password mismatch', 'Password and confirm password must match.');
+            return;
+        }
+
+        if (!(hasMinLength && hasUpperCase && hasSymbol)) {
+            Alert.alert('Weak password', 'Please follow all password requirements before continuing.');
+            return;
+        }
+
+        const targetMerchantId = merchantId || merchant?._id;
+
+        if (!targetMerchantId) {
+            Alert.alert('Missing account', 'Merchant account not found. Please verify OTP again.');
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+            await setPasswordRequest(targetMerchantId, password);
             setShowSuccess(true);
+        } catch (error: any) {
+            Alert.alert('Password setup failed', error?.message || 'Unable to set password right now.');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -131,8 +158,13 @@ const SecureAccountView = () => {
                 <TouchableOpacity 
                     style={[styles.primaryButton, !(password && confirmPassword === password) && styles.disabledButton]} 
                     onPress={handleSetPassword}
+                    disabled={isSubmitting}
                 >
-                    <Text style={styles.primaryButtonText}>Set Password</Text>
+                    {isSubmitting ? (
+                        <ActivityIndicator color={colors.white} />
+                    ) : (
+                        <Text style={styles.primaryButtonText}>Set Password</Text>
+                    )}
                 </TouchableOpacity>
             </ScrollView>
 

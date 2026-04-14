@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     StyleSheet,
     Text,
     View,
@@ -15,15 +17,28 @@ import Feather from 'react-native-vector-icons/Feather';
 import { colors, fonts, safeTop } from '../../../helpers/styles';
 import { useNavigation } from '@react-navigation/native';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
+import { useAppContext } from '../../../context/AppContext';
+import { uploadBusinessDocumentsRequest } from '../../../services/merchantApi';
 
 const { width } = Dimensions.get('window');
 
+const resolveUploadUri = (file: any): string | null => {
+    const rawUri = file?.fileCopyUri || file?.uri || file?.path;
+    if (!rawUri || typeof rawUri !== 'string') {
+        return null;
+    }
+    return rawUri;
+};
+
 const BusinessDocumentationView = () => {
     const navigation = useNavigation<any>();
+    const { authToken, businessDocumentDraft, saveBusinessDocumentDraft } = useAppContext();
     
-    const [selectedDocType, setSelectedDocType] = useState('GST Certificate');
-    const [certificateId, setCertificateId] = useState('GSTIN98273412B');
-    const [uploadedFile, setUploadedFile] = useState<any>({ name: 'certificate_file_01.pdf' });
+    const [selectedDocType, setSelectedDocType] = useState(businessDocumentDraft.selectedDocType || '');
+    const [certificateId, setCertificateId] = useState(businessDocumentDraft.certificateId);
+    const [uploadedFile, setUploadedFile] = useState<any>(businessDocumentDraft.uploadedFile);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showDocTypeOptions, setShowDocTypeOptions] = useState(!businessDocumentDraft.selectedDocType);
 
     const docOptions = [
         { id: 'gst', title: 'GST Certificate', subtitle: 'Max size 5MB (PDF, JPG)', icon: 'file-document-outline' },
@@ -36,14 +51,64 @@ const BusinessDocumentationView = () => {
         try {
             const [res] = await pick({
                 type: [types.pdf, types.images],
+                copyTo: 'cachesDirectory',
             });
-            setUploadedFile(res);
+            const pickedFile: any = res;
+            const normalizedFile = {
+                ...pickedFile,
+                uri: pickedFile.fileCopyUri || pickedFile.uri,
+            };
+
+            setUploadedFile(normalizedFile);
+            saveBusinessDocumentDraft({ uploadedFile: normalizedFile });
         } catch (err) {
             if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED) {
                 // User cancelled the picker
             } else {
                 throw err;
             }
+        }
+    };
+
+    const handleContinue = async () => {
+        if (!authToken) {
+            Alert.alert('Session expired', 'Please login again to continue onboarding.');
+            return;
+        }
+
+        const normalizedDocNumber = certificateId.trim();
+        const uploadUri = resolveUploadUri(uploadedFile);
+
+        if (!selectedDocType || !normalizedDocNumber || !uploadUri) {
+            Alert.alert('Incomplete details', 'Please select document type, enter document number, and upload image.');
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+
+            const normalizedFile = {
+                ...uploadedFile,
+                uri: uploadUri,
+            };
+
+            await uploadBusinessDocumentsRequest({
+                token: authToken,
+                gstNumber: normalizedDocNumber,
+                gstImage: normalizedFile,
+            });
+
+            await saveBusinessDocumentDraft({
+                selectedDocType,
+                certificateId: normalizedDocNumber,
+                uploadedFile: normalizedFile,
+            });
+
+            navigation.navigate('ShopDetails');
+        } catch (error: any) {
+            Alert.alert('Upload failed', error?.message || 'Unable to upload business document right now.');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -87,42 +152,68 @@ const BusinessDocumentationView = () => {
 
                     {/* Form Card */}
                     <View style={styles.formCard}>
-                        <Text style={styles.inputLabel}>Select Document Type</Text>
-                        <View style={styles.dropdown}>
+                        <Text style={styles.inputLabel}>Select Business Document Type</Text>
+                        <TouchableOpacity style={styles.dropdown} onPress={() => setShowDocTypeOptions((prev) => !prev)}>
                             <MaterialCommunityIcons name="file-document-outline" size={20} color={colors.darkGray} style={{ marginRight: 10 }} />
-                            <Text style={styles.dropdownText}>{selectedDocType || 'GST Certificate'}</Text>
-                            <Feather name="chevron-down" size={20} color={colors.darkGray} />
-                        </View>
+                            <Text style={styles.dropdownText}>{selectedDocType || 'Tap to choose document type'}</Text>
+                            <Feather name={showDocTypeOptions ? 'chevron-up' : 'chevron-down'} size={20} color={colors.darkGray} />
+                        </TouchableOpacity>
 
                         {/* Document Options List */}
-                        <View style={styles.optionsList}>
-                            {docOptions.map((opt) => (
-                                <TouchableOpacity 
-                                    key={opt.id} 
-                                    style={[styles.optionItem, selectedDocType === opt.title && styles.activeOption]}
-                                    onPress={() => setSelectedDocType(opt.title)}
-                                >
-                                    <View style={styles.optionIconBox}>
-                                        <MaterialCommunityIcons name={opt.icon as any} size={22} color={colors.darkGray} />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.optionTitle}>{opt.title}</Text>
-                                        <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
-                                    </View>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                        {showDocTypeOptions && (
+                            <View style={styles.optionsList}>
+                                {docOptions.map((opt) => (
+                                    <TouchableOpacity 
+                                        key={opt.id} 
+                                        style={[styles.optionItem, selectedDocType === opt.title && styles.activeOption]}
+                                        onPress={() => {
+                                            setSelectedDocType(opt.title);
+                                            saveBusinessDocumentDraft({ selectedDocType: opt.title });
+                                            setShowDocTypeOptions(false);
+                                        }}
+                                    >
+                                        <View style={styles.optionIconBox}>
+                                            <MaterialCommunityIcons name={opt.icon as any} size={22} color={colors.darkGray} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.optionTitle}>{opt.title}</Text>
+                                            <Text style={styles.optionSubtitle}>{opt.subtitle}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        )}
 
-                        <Text style={styles.inputLabel}>Certificate ID Number</Text>
+                        <Text style={styles.inputLabel}>Document Number</Text>
                         <View style={styles.inputContainer}>
                             <MaterialCommunityIcons name="card-text-outline" size={22} color={colors.lightGray} />
                             <TextInput
                                 style={styles.input}
                                 value={certificateId}
-                                onChangeText={setCertificateId}
+                                onChangeText={(value) => {
+                                    setCertificateId(value);
+                                    saveBusinessDocumentDraft({ certificateId: value });
+                                }}
                                 placeholder="Enter ID number"
                             />
                         </View>
+
+                        <Text style={styles.inputLabel}>Select Document Image</Text>
+                        <TouchableOpacity style={styles.uploadBox} onPress={pickDocument}>
+                            <View style={styles.uploadIconContainer}>
+                                <MaterialCommunityIcons 
+                                    name={uploadedFile ? 'file-check-outline' : 'camera-plus-outline'} 
+                                    size={26} 
+                                    color={uploadedFile ? '#15803d' : colors.orange}
+                                />
+                            </View>
+                            <Text style={styles.uploadTitle}>
+                                {uploadedFile?.name || 'Tap to pick document image'}
+                            </Text>
+                            <Text style={styles.uploadSubtitle}>
+                                {uploadedFile ? 'Image selected and ready to upload' : 'Image is required to submit business documents'}
+                            </Text>
+                        </TouchableOpacity>
 
                         {/* Upload Success Status */}
                         {uploadedFile && (
@@ -168,10 +259,17 @@ const BusinessDocumentationView = () => {
                 </TouchableOpacity>
                 <TouchableOpacity 
                     style={styles.continueButton}
-                    onPress={() => navigation.navigate('ShopDetails')}
+                    onPress={handleContinue}
+                    disabled={isSubmitting}
                 >
-                    <Text style={styles.continueButtonText}>Continue</Text>
-                    <MaterialCommunityIcons name="arrow-right" size={20} color={colors.white} />
+                    {isSubmitting ? (
+                        <ActivityIndicator color={colors.white} />
+                    ) : (
+                        <>
+                            <Text style={styles.continueButtonText}>Continue</Text>
+                            <MaterialCommunityIcons name="arrow-right" size={20} color={colors.white} />
+                        </>
+                    )}
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -335,6 +433,39 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: colors.black,
         fontWeight: '600',
+    },
+    uploadBox: {
+        borderWidth: 1,
+        borderColor: '#D1D5DB',
+        borderStyle: 'dashed',
+        borderRadius: 12,
+        paddingVertical: 16,
+        paddingHorizontal: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 20,
+        backgroundColor: '#FFFFFF',
+    },
+    uploadIconContainer: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: '#F8FAFC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
+    uploadTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: colors.darkGray,
+        textAlign: 'center',
+    },
+    uploadSubtitle: {
+        fontSize: 12,
+        color: colors.lightGray,
+        textAlign: 'center',
+        marginTop: 4,
     },
     successCard: {
         flexDirection: 'row',
