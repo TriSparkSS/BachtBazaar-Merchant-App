@@ -1,14 +1,15 @@
-import { ActivityIndicator, Alert, StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, InteractionManager, Platform } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, InteractionManager, Platform } from 'react-native'
 import React, { useState } from 'react'
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { colors, screenWidth, safeTop } from '../../../helpers/styles';
-import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { PasswordSetModal } from '../../../components';
 import { navigationRef } from '../../../navigation';
 import backarrowicon from '../../../assets/icons/backarrow.png'
 import { setPasswordRequest } from '../../../services/authApi';
 import { useAppContext } from '../../../context/AppContext';
+import { appAlert } from '../../../services/dialogService';
 
 /** Run after modal hides — StackActions.replace + Modal timing often fails; reset is reliable. */
 const afterModalNavigate = (go: () => void) => {
@@ -21,9 +22,7 @@ const afterModalNavigate = (go: () => void) => {
 
 const SecureAccountView = () => {
     const navigation = useNavigation<any>();
-    const route = useRoute<any>();
-    const { merchantId } = route.params || {};
-    const { merchant } = useAppContext();
+    const { authToken } = useAppContext();
 
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -36,31 +35,37 @@ const SecureAccountView = () => {
     const hasMinLength = password.length >= 8;
     const hasUpperCase = /[A-Z]/.test(password);
     const hasSymbol = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    const isPasswordStrong = hasMinLength && hasUpperCase && hasSymbol;
+    const isConfirmMatch = confirmPassword.length > 0 && password === confirmPassword;
+    const canSubmit = Boolean(authToken && password && confirmPassword && isPasswordStrong && isConfirmMatch);
 
     const handleSetPassword = async () => {
+        if (!password || !confirmPassword) {
+            appAlert('Incomplete details', 'Please enter password and confirm password.');
+            return;
+        }
+
         if (password !== confirmPassword) {
-            Alert.alert('Password mismatch', 'Password and confirm password must match.');
+            appAlert('Password mismatch', 'Password and confirm password must match.');
             return;
         }
 
-        if (!(hasMinLength && hasUpperCase && hasSymbol)) {
-            Alert.alert('Weak password', 'Please follow all password requirements before continuing.');
+        if (!isPasswordStrong) {
+            appAlert('Weak password', 'Please follow all password requirements before continuing.');
             return;
         }
 
-        const targetMerchantId = merchantId || merchant?._id;
-
-        if (!targetMerchantId) {
-            Alert.alert('Missing account', 'Merchant account not found. Please verify OTP again.');
+        if (!authToken) {
+            appAlert('Session expired', 'Please verify OTP again to continue.');
             return;
         }
 
         try {
             setIsSubmitting(true);
-            await setPasswordRequest(targetMerchantId, password);
+            await setPasswordRequest(password, authToken);
             setShowSuccess(true);
         } catch (error: any) {
-            Alert.alert('Password setup failed', error?.message || 'Unable to set password right now.');
+            appAlert('Password setup failed', error?.message || 'Unable to set password right now.');
         } finally {
             setIsSubmitting(false);
         }
@@ -125,6 +130,10 @@ const SecureAccountView = () => {
                         </TouchableOpacity>
                     </View>
 
+                    {confirmPassword.length > 0 && !isConfirmMatch ? (
+                        <Text style={styles.mismatchText}>Confirm password does not match</Text>
+                    ) : null}
+
                     {/* Requirement Checklist */}
                     <View style={styles.requirementsContainer}>
                         <View style={styles.requirementRow}>
@@ -151,14 +160,22 @@ const SecureAccountView = () => {
                             />
                             <Text style={[styles.requirementText, hasSymbol && styles.reqValid]}>1 symbol (!@#$%)</Text>
                         </View>
+                        <View style={styles.requirementRow}>
+                            <MaterialIcons
+                                name={isConfirmMatch ? "check-circle" : "radio-button-unchecked"}
+                                size={18}
+                                color={isConfirmMatch ? "#166534" : colors.lighterGray}
+                            />
+                            <Text style={[styles.requirementText, isConfirmMatch && styles.reqValid]}>Passwords match</Text>
+                        </View>
                     </View>
                 </View>
 
                 {/* Set Password Button */}
                 <TouchableOpacity 
-                    style={[styles.primaryButton, !(password && confirmPassword === password) && styles.disabledButton]} 
+                    style={[styles.primaryButton, !canSubmit && styles.disabledButton]} 
                     onPress={handleSetPassword}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !canSubmit}
                 >
                     {isSubmitting ? (
                         <ActivityIndicator color={colors.white} />
@@ -285,6 +302,13 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: colors.black,
         letterSpacing: 2,
+    },
+    mismatchText: {
+        marginTop: -4,
+        marginBottom: 8,
+        fontSize: 12,
+        color: '#DC2626',
+        fontWeight: '600',
     },
     requirementsContainer: {
         marginTop: 10,

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     StyleSheet,
     Text,
     View,
@@ -20,6 +19,8 @@ import { useNavigation } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { useAppContext } from '../../../context/AppContext';
 import { updateMerchantProfileRequest } from '../../../services/merchantApi';
+import { appAlert } from '../../../services/dialogService';
+import { validateImageUnderOneMb } from '../../../helpers/fileValidation';
 
 const { width } = Dimensions.get('window');
 
@@ -31,6 +32,56 @@ const resolveImageUri = (value: any): string | null => {
     if (typeof value?.path === 'string') return value.path;
     return null;
 };
+
+type InputCardProps = {
+    label: string;
+    value: string;
+    onChangeText: (value: string) => void;
+    icon: 'mail' | 'phone' | 'map-pin' | 'user-orange' | 'user-blue';
+    isLocked?: boolean;
+    isDropdown?: boolean;
+    onPress?: () => void;
+};
+
+const InputCard = ({
+    label,
+    value,
+    onChangeText,
+    icon,
+    isLocked = false,
+    isDropdown = false,
+    onPress,
+}: InputCardProps) => (
+    <TouchableOpacity style={styles.card} activeOpacity={isDropdown ? 0.8 : 1} onPress={onPress} disabled={!isDropdown}>
+        <View style={styles.iconContainer}>
+            {icon === 'mail' ? (
+                <Feather name="mail" size={20} color={colors.blue} />
+            ) : icon === 'phone' ? (
+                <Feather name="smartphone" size={20} color={colors.blue} />
+            ) : icon === 'map-pin' ? (
+                <Feather name="map-pin" size={20} color={colors.orange} />
+            ) : (
+                <Feather name="user" size={20} color={isDropdown ? colors.blue : colors.orange} />
+            )}
+        </View>
+        <View style={styles.inputContent}>
+            <Text style={styles.inputLabel}>{label}</Text>
+            <TextInput
+                style={styles.input}
+                value={value}
+                onChangeText={onChangeText}
+                editable={!isLocked && !isDropdown}
+                placeholder={`Enter ${label.toLowerCase()}`}
+            />
+        </View>
+        {isLocked && (
+            <Feather name="lock" size={16} color="#CBD5E1" />
+        )}
+        {isDropdown && (
+            <Feather name="chevron-down" size={20} color="#94A3B8" />
+        )}
+    </TouchableOpacity>
+);
 
 const EditProfileView = () => {
     const navigation = useNavigation<any>();
@@ -64,31 +115,39 @@ const EditProfileView = () => {
                 return;
             }
 
-            setProfileImage({
+            const normalizedImage = {
                 uri: asset.uri,
                 type: asset.type || 'image/jpeg',
                 name: asset.fileName || `profile-${Date.now()}.jpg`,
                 fileSize: asset.fileSize,
-            });
+            };
+
+            const imageValidation = validateImageUnderOneMb(normalizedImage);
+            if (!imageValidation.valid) {
+                appAlert('Image too large', imageValidation.message);
+                return;
+            }
+
+            setProfileImage(normalizedImage);
         } catch (err) {
-            Alert.alert('Image failed', 'Unable to select profile image right now.');
+            appAlert('Image failed', 'Unable to select profile image right now.');
         }
     };
 
     const handleSaveChanges = async () => {
         if (!authToken) {
-            Alert.alert('Session expired', 'Please log in again.');
+            appAlert('Session expired', 'Please log in again.');
             return;
         }
 
         if (!fullName || !city || !gender) {
-            Alert.alert('Incomplete profile', 'Please complete full name, city, and gender.');
+            appAlert('Incomplete profile', 'Please complete full name, city, and gender.');
             return;
         }
 
         const normalizedPhone = mobileNumber.replace(/\D/g, '').slice(-10);
         if (normalizedPhone.length !== 10) {
-            Alert.alert('Invalid mobile number', 'Please enter a valid 10-digit mobile number.');
+            appAlert('Invalid mobile number', 'Please enter a valid 10-digit mobile number.');
             return;
         }
 
@@ -106,43 +165,11 @@ const EditProfileView = () => {
             await updateMerchant(response.merchant);
             navigation.navigate('BusinessDocumentation');
         } catch (error: any) {
-            Alert.alert('Profile update failed', error?.message || 'Unable to update profile right now.');
+            appAlert('Profile update failed', error?.message || 'Unable to update profile right now.');
         } finally {
             setIsSaving(false);
         }
     };
-
-    const InputCard = ({ label, value, onChangeText, icon, isLocked = false, isDropdown = false, onPress }: any) => (
-        <TouchableOpacity style={styles.card} activeOpacity={isDropdown ? 0.8 : 1} onPress={onPress} disabled={!isDropdown}>
-            <View style={styles.iconContainer}>
-                {icon === 'mail' ? (
-                    <Feather name="mail" size={20} color={colors.blue} />
-                ) : icon === 'phone' ? (
-                    <Feather name="smartphone" size={20} color={colors.blue} />
-                ) : icon === 'map-pin' ? (
-                    <Feather name="map-pin" size={20} color={colors.orange} />
-                ) : (
-                    <Feather name="user" size={20} color={isDropdown ? colors.blue : colors.orange} />
-                )}
-            </View>
-            <View style={styles.inputContent}>
-                <Text style={styles.inputLabel}>{label}</Text>
-                <TextInput
-                    style={styles.input}
-                    value={value}
-                    onChangeText={onChangeText}
-                    editable={!isLocked && !isDropdown}
-                    placeholder={`Enter ${label.toLowerCase()}`}
-                />
-            </View>
-            {isLocked && (
-                <Feather name="lock" size={16} color="#CBD5E1" />
-            )}
-            {isDropdown && (
-                <Feather name="chevron-down" size={20} color="#94A3B8" />
-            )}
-        </TouchableOpacity>
-    );
 
     const handleGenderPress = () => {
         const options = ['Male', 'Female', 'Other'];

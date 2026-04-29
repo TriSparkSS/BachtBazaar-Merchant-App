@@ -1,4 +1,4 @@
-import { ActivityIndicator, Alert, StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, InteractionManager, Platform } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, InteractionManager, Platform } from 'react-native'
 import React, { useState } from 'react'
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -18,8 +18,10 @@ const afterModalNavigate = (go: () => void) => {
 import CallIcon from '../../../assets/icons/call.svg';
 import DownArrowIcon from '../../../assets/icons/down-arrow.svg';
 import backarrowicon from '../../../assets/icons/backarrow.png'
-import { loginWithPasswordRequest } from '../../../services/authApi';
+import { loginWithPasswordRequest, requestLoginOtp } from '../../../services/authApi';
 import { useAppContext } from '../../../context/AppContext';
+import { sendPhoneOtp } from '../../../services/firebasePhoneAuth';
+import { appAlert } from '../../../services/dialogService';
 
 const PasswordLoginView = () => {
     const navigation = useNavigation<any>();
@@ -33,6 +35,7 @@ const PasswordLoginView = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
+    const [isSendingForgotOtp, setIsSendingForgotOtp] = useState(false);
 
     // Requirement checks (Simulated)
     const hasMinLength = password.length >= 8;
@@ -42,23 +45,62 @@ const PasswordLoginView = () => {
     const handleLogin = async () => {
         try {
             if (!phoneNumber) {
-                Alert.alert('Missing phone', 'Please go back and enter your phone number.');
+                appAlert('Missing phone', 'Please go back and enter your phone number.');
                 return;
             }
 
             if (!password) {
-                Alert.alert('Missing password', 'Please enter your password.');
+                appAlert('Missing password', 'Please enter your password.');
                 return;
             }
 
             setIsLoggingIn(true);
             const response = await loginWithPasswordRequest(phoneNumber, password);
-            await setSession(response.token, response.merchant);
+            const sessionStatus = await setSession(response.token, response.merchant);
+            if (sessionStatus.isComplete) {
+                if (!navigationRef.isReady()) {
+                    return;
+                }
+                navigationRef.dispatch(
+                    CommonActions.reset({
+                        index: 0,
+                        routes: [{ name: 'MainStack' }],
+                    })
+                );
+                return;
+            }
             setShowSuccess(true);
         } catch (error: any) {
-            Alert.alert('Login failed', error?.message || 'Unable to log in with password.');
+            appAlert('Login failed', error?.message || 'Unable to log in with password.');
         } finally {
             setIsLoggingIn(false);
+        }
+    };
+
+    const handleForgotPassword = async () => {
+        try {
+            if (!phoneNumber) {
+                appAlert('Missing phone', 'Please go back and enter your phone number.');
+                return;
+            }
+
+            setIsSendingForgotOtp(true);
+            const otpCheck = await requestLoginOtp(phoneNumber);
+            if (!otpCheck.exists) {
+                appAlert('Account not found', 'This mobile number is not registered.');
+                return;
+            }
+
+            const formattedPhoneNumber = await sendPhoneOtp(phoneNumber);
+            navigation.navigate('VerifyOTP', {
+                phoneNumber: formattedPhoneNumber,
+                rawPhoneNumber: phoneNumber,
+                flow: 'forgot',
+            });
+        } catch (error: any) {
+            appAlert('OTP failed', error?.message || 'Unable to send OTP right now. Please try again.');
+        } finally {
+            setIsSendingForgotOtp(false);
         }
     };
 
@@ -156,6 +198,16 @@ const PasswordLoginView = () => {
                     ) : (
                         <Text style={styles.primaryButtonText}>Login</Text>
                     )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.forgotPasswordButton}
+                    onPress={handleForgotPassword}
+                    disabled={isSendingForgotOtp}
+                >
+                    <Text style={styles.forgotPasswordText}>
+                        {isSendingForgotOtp ? 'Sending OTP...' : 'Forgot Password?'}
+                    </Text>
                 </TouchableOpacity>
             </ScrollView>
 
@@ -365,5 +417,13 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         color: colors.white,
+    },
+    forgotPasswordButton: {
+        marginTop: 12,
+    },
+    forgotPasswordText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: colors.orange,
     },
 });

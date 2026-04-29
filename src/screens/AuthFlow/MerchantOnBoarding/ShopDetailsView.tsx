@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     StyleSheet,
     Text,
     View,
@@ -16,7 +15,13 @@ import Feather from 'react-native-vector-icons/Feather';
 import { colors, fonts, safeTop, screenWidth } from '../../../helpers/styles';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAppContext } from '../../../context/AppContext';
-import { fetchCategoriesRequest, Category } from '../../../services/merchantApi';
+import { appAlert } from '../../../services/dialogService';
+import {
+    fetchCategoriesRequest,
+    fetchSubcategoriesRequest,
+    Category,
+    Subcategory,
+} from '../../../services/merchantApi';
 
 const { width } = Dimensions.get('window');
 
@@ -31,14 +36,21 @@ const ShopDetailsView = () => {
     const [selectedSubCategory, setSelectedSubCategory] = useState(shopDraft.subCategory);
     const [shopName, setShopName] = useState(shopDraft.shopName);
     const [shopAddress, setShopAddress] = useState(shopDraft.address);
+    const [shopAddress1, setShopAddress1] = useState(shopDraft.address1 || '');
     const [city, setCity] = useState(shopDraft.city);
     const [phone, setPhone] = useState(shopDraft.phone || merchant?.phone || '');
     const [selectedCoordinates, setSelectedCoordinates] = useState<{
         latitude: number;
         longitude: number;
-    } | null>(null);
+    } | null>(
+        typeof shopDraft.latitude === 'number' && typeof shopDraft.longitude === 'number'
+            ? { latitude: shopDraft.latitude, longitude: shopDraft.longitude }
+            : null,
+    );
     const [categories, setCategories] = useState<Category[]>([]);
+    const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
     const [loadingCategories, setLoadingCategories] = useState(false);
+    const [loadingSubcategories, setLoadingSubcategories] = useState(false);
 
     useEffect(() => {
         const loadCategories = async () => {
@@ -61,7 +73,7 @@ const ShopDetailsView = () => {
                     });
                 }
             } catch (error: any) {
-                Alert.alert('Category error', error?.message || 'Unable to load categories right now.');
+                appAlert('Category error', error?.message || 'Unable to load categories right now.');
             } finally {
                 setLoadingCategories(false);
             }
@@ -69,6 +81,49 @@ const ShopDetailsView = () => {
 
         loadCategories();
     }, [authToken]);
+
+    useEffect(() => {
+        const loadSubcategories = async () => {
+            if (!authToken || !selectedCategoryId) {
+                setSubcategories([]);
+                return;
+            }
+
+            try {
+                setLoadingSubcategories(true);
+                const response = await fetchSubcategoriesRequest(authToken, selectedCategoryId);
+                const list = response?.subcategories || [];
+                setSubcategories(list);
+
+                if (!list.length) {
+                    if (selectedSubCategory) {
+                        setSelectedSubCategory('');
+                        await saveShopDraft({ subCategory: '' });
+                    }
+                    return;
+                }
+
+                const isCurrentStillValid = list.some((item) => {
+                    const itemLabel = item.label || item.name || item.value || '';
+                    return itemLabel === selectedSubCategory;
+                });
+
+                if (!isCurrentStillValid) {
+                    const first = list[0];
+                    const defaultSubcategory = first?.label || first?.name || first?.value || '';
+                    setSelectedSubCategory(defaultSubcategory);
+                    await saveShopDraft({ subCategory: defaultSubcategory });
+                }
+            } catch (error: any) {
+                setSubcategories([]);
+                appAlert('Subcategory error', error?.message || 'Unable to load subcategories right now.');
+            } finally {
+                setLoadingSubcategories(false);
+            }
+        };
+
+        loadSubcategories();
+    }, [authToken, selectedCategoryId]);
 
     useEffect(() => {
         const params = route?.params || {};
@@ -97,10 +152,10 @@ const ShopDetailsView = () => {
         saveShopDraft({
             ...(selectedAddress ? { address: selectedAddress } : {}),
             ...(selectedCity ? { city: selectedCity } : {}),
+            ...(typeof selectedLatitude === 'number' ? { latitude: selectedLatitude } : {}),
+            ...(typeof selectedLongitude === 'number' ? { longitude: selectedLongitude } : {}),
         });
     }, [route?.params?.selectedAddress, route?.params?.selectedCity, route?.params?.selectedLatitude, route?.params?.selectedLongitude]);
-
-    const subCategories = ['Fast Food', 'Fine Dining', 'Cafe', 'Bakery', 'Take away'];
 
     const Tag = ({ name, icon, color, textColor, borderColor, isSelected, onPress }: any) => (
         <TouchableOpacity 
@@ -208,19 +263,35 @@ const ShopDetailsView = () => {
                     {/* Sub Category Selection Card */}
                     <View style={styles.card}>
                         <Text style={styles.cardLabel}>Sub Category</Text>
-                        <View style={styles.subTagsGrid}>
-                            {subCategories.map((sub) => (
-                                <SubTag 
-                                    key={sub}
-                                    name={sub}
-                                    isSelected={selectedSubCategory === sub}
-                                    onPress={() => {
-                                        setSelectedSubCategory(sub);
-                                        saveShopDraft({ subCategory: sub });
-                                    }}
-                                />
-                            ))}
-                        </View>
+                        {loadingSubcategories ? (
+                            <View style={styles.categoryLoader}>
+                                <ActivityIndicator color={colors.orange} />
+                                <Text style={styles.categoryLoaderText}>Loading subcategories...</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.subTagsGrid}>
+                                {subcategories.length ? (
+                                    subcategories.map((sub) => {
+                                        const subLabel = sub.label || sub.name || sub.value || 'Subcategory';
+                                        return (
+                                            <SubTag 
+                                                key={sub._id}
+                                                name={subLabel}
+                                                isSelected={selectedSubCategory === subLabel}
+                                                onPress={() => {
+                                                    setSelectedSubCategory(subLabel);
+                                                    saveShopDraft({ subCategory: subLabel });
+                                                }}
+                                            />
+                                        );
+                                    })
+                                ) : (
+                                    <Text style={styles.categoryLoaderText}>
+                                        Select a category to view subcategories.
+                                    </Text>
+                                )}
+                            </View>
+                        )}
                     </View>
 
                     {/* Shop Address Card */}
@@ -255,6 +326,18 @@ const ShopDetailsView = () => {
                                 placeholderTextColor="#94A3B8"
                                 value={city}
                                 onChangeText={setCity}
+                            />
+                        </View>
+
+                        <Text style={[styles.cardLabel, { marginTop: 15 }]}>Another Address (Address 1)</Text>
+                        <View style={styles.inputContainer}>
+                            <Feather name="home" size={18} color={colors.lightGray} />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Flat/Building/Landmark (optional)"
+                                placeholderTextColor="#94A3B8"
+                                value={shopAddress1}
+                                onChangeText={setShopAddress1}
                             />
                         </View>
 
@@ -299,7 +382,7 @@ const ShopDetailsView = () => {
                     onPress={async () => {
                         const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
                         if (!shopName || !selectedCategoryId || !shopAddress || !city || normalizedPhone.length !== 10) {
-                            Alert.alert('Incomplete details', 'Please fill shop name, category, address, city, and valid phone number.');
+                            appAlert('Incomplete details', 'Please fill shop name, category, address, city, and valid phone number.');
                             return;
                         }
 
@@ -309,8 +392,10 @@ const ShopDetailsView = () => {
                             category: selectedCategory,
                             subCategory: selectedSubCategory,
                             address: shopAddress,
+                            address1: shopAddress1.trim() || shopAddress,
                             city,
                             phone: normalizedPhone,
+                            ...(selectedCoordinates ? { latitude: selectedCoordinates.latitude, longitude: selectedCoordinates.longitude } : {}),
                         });
                         navigation.navigate('FinalizingDetails');
                     }}

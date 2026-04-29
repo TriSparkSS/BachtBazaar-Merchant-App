@@ -1,4 +1,4 @@
-import { ActivityIndicator, Alert, StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native'
 import React, { useState } from 'react'
 // import Feather from 'react-native-vector-icons/Feather';
 // import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -9,6 +9,7 @@ import CallIcon from '../../../assets/icons/call.svg';
 import DownArrowIcon from '../../../assets/icons/down-arrow.svg';
 import { sendPhoneOtp } from '../../../services/firebasePhoneAuth';
 import { requestLoginOtp, sendOtpRequest } from '../../../services/authApi';
+import { appAlert } from '../../../services/dialogService';
 
 
 const LoginView = () => {
@@ -22,7 +23,7 @@ const LoginView = () => {
     const handleSendOTP = async () => {
         try {
             if (normalizedPhone.length !== 10) {
-                Alert.alert('Invalid phone number', 'Please enter a valid 10-digit mobile number.');
+                appAlert('Invalid phone number', 'Please enter a valid 10-digit mobile number.');
                 return;
             }
 
@@ -33,12 +34,12 @@ const LoginView = () => {
                     : await sendOtpRequest(normalizedPhone);
 
             if (activeTab === 'Login' && !otpCheck.exists) {
-                Alert.alert('Account not found', 'This mobile number is not registered yet. Please sign up first.');
+                appAlert('Account not found', 'This mobile number is not registered yet. Please sign up first.');
                 return;
             }
 
             if (activeTab === 'Sign-up' && otpCheck.exists) {
-                Alert.alert('Account already exists', 'This mobile number is already registered. Please log in instead.');
+                appAlert('Account already exists', 'This mobile number is already registered. Please log in instead.');
                 return;
             }
 
@@ -49,7 +50,7 @@ const LoginView = () => {
                 flow: activeTab === 'Sign-up' ? 'signup' : 'login'
             });
         } catch (error: any) {
-            Alert.alert('OTP failed', error?.message || 'Unable to send OTP right now. Please try again.');
+            appAlert('OTP failed', error?.message || 'Unable to send OTP right now. Please try again.');
         } finally {
             setIsSendingOtp(false);
         }
@@ -57,7 +58,7 @@ const LoginView = () => {
 
     const handleLoginWithPassword = () => {
         if (normalizedPhone.length !== 10) {
-            Alert.alert('Invalid phone number', 'Please enter a valid 10-digit mobile number.');
+            appAlert('Invalid phone number', 'Please enter a valid 10-digit mobile number.');
             return;
         }
 

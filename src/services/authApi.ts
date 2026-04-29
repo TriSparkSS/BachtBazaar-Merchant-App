@@ -44,14 +44,28 @@ export const loginOtpRequest = (token: string) =>
     body: { token },
   });
 
-export const setPasswordRequest = (merchantId: string, password: string) =>
-  apiRequest<{ success: boolean }>('/set-password', {
+export const setPasswordRequest = (password: string, token: string) =>
+  apiRequest<{ success: boolean; message?: string }>('http://bachatbazaar.tech/api/merchants/set-password', {
     method: 'POST',
-    body: { merchantId, password },
+    body: { password },
+    token,
   });
 
 export const loginWithPasswordRequest = (phone: string, password: string) =>
   apiRequest<AuthResponse>('/login-password', {
     method: 'POST',
     body: { phone: normalizePhoneForApi(phone), password },
+  });
+
+export const updatePasswordRequest = (token: string, oldPassword: string, newPassword: string) =>
+  apiRequest<{ success: boolean; message?: string }>('http://bachatbazaar.tech/api/merchant/auth/password', {
+    method: 'PUT',
+    body: { oldPassword, newPassword },
+    token,
+  });
+
+export const forgotPasswordRequest = (token: string, newPassword: string) =>
+  apiRequest<{ success: boolean; message?: string }>('http://bachatbazaar.tech/api/merchant/auth/forgot-password', {
+    method: 'POST',
+    body: { token, newPassword },
   });

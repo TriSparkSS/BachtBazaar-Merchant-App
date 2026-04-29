@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     StyleSheet,
     Text,
     View,
@@ -19,6 +18,8 @@ import { useNavigation } from '@react-navigation/native';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import { useAppContext } from '../../../context/AppContext';
 import { uploadBusinessDocumentsRequest } from '../../../services/merchantApi';
+import { appAlert } from '../../../services/dialogService';
+import { validateImageUnderOneMb } from '../../../helpers/fileValidation';
 
 const { width } = Dimensions.get('window');
 
@@ -41,7 +42,8 @@ const BusinessDocumentationView = () => {
     const [showDocTypeOptions, setShowDocTypeOptions] = useState(!businessDocumentDraft.selectedDocType);
 
     const docOptions = [
-        { id: 'gst', title: 'GST Certificate', subtitle: 'Max size 5MB (PDF, JPG)', icon: 'file-document-outline' },
+        { id: 'gst', title: 'GST Certificate', subtitle: 'Max image size 1MB (PDF or JPG)', icon: 'file-document-outline' },
+        { id: 'pan', title: 'PAN', subtitle: 'PAN number with PAN image', icon: 'card-account-details-outline' },
         { id: 'trade', title: 'Trade License', subtitle: 'Valid till current year', icon: 'file-certificate-outline' },
         { id: 'shop', title: 'Shop Registration', subtitle: 'Gumasta or equivalent', icon: 'storefront-outline' },
         { id: 'fssai', title: 'FSSAI License', subtitle: 'Required for food merchants', icon: 'silverware-variant' },
@@ -59,6 +61,12 @@ const BusinessDocumentationView = () => {
                 uri: pickedFile.fileCopyUri || pickedFile.uri,
             };
 
+            const imageValidation = validateImageUnderOneMb(normalizedFile);
+            if (!imageValidation.valid) {
+                appAlert('Image too large', imageValidation.message);
+                return;
+            }
+
             setUploadedFile(normalizedFile);
             saveBusinessDocumentDraft({ uploadedFile: normalizedFile });
         } catch (err) {
@@ -72,15 +80,21 @@ const BusinessDocumentationView = () => {
 
     const handleContinue = async () => {
         if (!authToken) {
-            Alert.alert('Session expired', 'Please login again to continue onboarding.');
+            appAlert('Session expired', 'Please login again to continue onboarding.');
             return;
         }
 
         const normalizedDocNumber = certificateId.trim();
         const uploadUri = resolveUploadUri(uploadedFile);
+        const hasExistingUploadedDoc = Boolean(
+            businessDocumentDraft.uploaded &&
+            businessDocumentDraft.selectedDocType === selectedDocType &&
+            (businessDocumentDraft.certificateId || '').trim() === normalizedDocNumber &&
+            !uploadUri
+        );
 
-        if (!selectedDocType || !normalizedDocNumber || !uploadUri) {
-            Alert.alert('Incomplete details', 'Please select document type, enter document number, and upload image.');
+        if (!selectedDocType || !normalizedDocNumber || (!uploadUri && !hasExistingUploadedDoc)) {
+            appAlert('Incomplete details', 'Please select document type, enter document number, and upload image.');
             return;
         }
 
@@ -92,21 +106,33 @@ const BusinessDocumentationView = () => {
                 uri: uploadUri,
             };
 
+            if (hasExistingUploadedDoc && !uploadUri) {
+                await saveBusinessDocumentDraft({
+                    selectedDocType,
+                    certificateId: normalizedDocNumber,
+                    uploaded: true,
+                });
+                navigation.navigate('ShopDetails');
+                return;
+            }
+
             await uploadBusinessDocumentsRequest({
                 token: authToken,
-                gstNumber: normalizedDocNumber,
-                gstImage: normalizedFile,
+                documentType: selectedDocType === 'PAN' ? 'PAN' : 'GST',
+                documentNumber: normalizedDocNumber,
+                documentFile: normalizedFile,
             });
 
             await saveBusinessDocumentDraft({
                 selectedDocType,
                 certificateId: normalizedDocNumber,
                 uploadedFile: normalizedFile,
+                uploaded: true,
             });
 
             navigation.navigate('ShopDetails');
         } catch (error: any) {
-            Alert.alert('Upload failed', error?.message || 'Unable to upload business document right now.');
+            appAlert('Upload failed', error?.message || 'Unable to upload business document right now.');
         } finally {
             setIsSubmitting(false);
         }
@@ -202,28 +228,32 @@ const BusinessDocumentationView = () => {
                         <TouchableOpacity style={styles.uploadBox} onPress={pickDocument}>
                             <View style={styles.uploadIconContainer}>
                                 <MaterialCommunityIcons 
-                                    name={uploadedFile ? 'file-check-outline' : 'camera-plus-outline'} 
+                                    name={uploadedFile || businessDocumentDraft.uploaded ? 'file-check-outline' : 'camera-plus-outline'} 
                                     size={26} 
-                                    color={uploadedFile ? '#15803d' : colors.orange}
+                                    color={uploadedFile || businessDocumentDraft.uploaded ? '#15803d' : colors.orange}
                                 />
                             </View>
                             <Text style={styles.uploadTitle}>
-                                {uploadedFile?.name || 'Tap to pick document image'}
+                                {uploadedFile?.name || (businessDocumentDraft.uploaded ? 'Document already uploaded' : 'Tap to pick document image')}
                             </Text>
                             <Text style={styles.uploadSubtitle}>
-                                {uploadedFile ? 'Image selected and ready to upload' : 'Image is required to submit business documents'}
+                                {uploadedFile
+                                    ? 'Image selected and ready to upload'
+                                    : businessDocumentDraft.uploaded
+                                        ? 'Using your previously uploaded document'
+                                        : 'Image is required to submit business documents'}
                             </Text>
                         </TouchableOpacity>
 
                         {/* Upload Success Status */}
-                        {uploadedFile && (
+                        {(uploadedFile || businessDocumentDraft.uploaded) && (
                             <View style={styles.successCard}>
                                 <View style={styles.successIconBox}>
                                     <MaterialCommunityIcons name="file-document" size={24} color="#15803d" />
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.successTitle}>Document uploaded successfully</Text>
-                                    <Text style={styles.successFilename}>{uploadedFile.name}</Text>
+                                    <Text style={styles.successFilename}>{uploadedFile?.name || 'Previously uploaded document'}</Text>
                                 </View>
                                 <TouchableOpacity onPress={pickDocument}>
                                     <Text style={styles.changeFileText}>Change{"\n"}File</Text>

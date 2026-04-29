@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, ActivityIndicator, BackHandler, View } from 'react-native';
+import { ActivityIndicator, BackHandler, View } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef, StackActions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import { AuthStack } from './AuthStack';
 import { MainStack } from './MainStack';
 import { useAppContext } from '../context/AppContext';
 import { colors } from '../helpers/styles';
+import { appAlert } from '../services/dialogService';
 
 
 export const navigationRef = createNavigationContainerRef();
@@ -27,7 +28,7 @@ const handleBackButtonClick = () => {
 
 	// Only handle for AuthStack when can't go back
 	if (!navigationRef.canGoBack()) {
-		Alert.alert('Hold on!', 'Are you sure you want to exit the application?', [
+		appAlert('Hold on!', 'Are you sure you want to exit the application?', [
 			{
 				text: 'Cancel',
 				onPress: () => console.log('cancel')

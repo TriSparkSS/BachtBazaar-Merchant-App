@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     Platform,
     StyleSheet,
     Text,
@@ -20,9 +19,54 @@ import { colors, fonts, safeTop } from '../../../helpers/styles';
 import { useNavigation } from '@react-navigation/native';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import { useAppContext } from '../../../context/AppContext';
-import { updateMerchantShopRequest } from '../../../services/merchantApi';
+import { fetchShopHoursRequest, ShopOpeningHours, updateMerchantShopRequest, updateShopHoursRequest } from '../../../services/merchantApi';
+import { appAlert } from '../../../services/dialogService';
+import { validateImageUnderOneMb } from '../../../helpers/fileValidation';
 
 const { width } = Dimensions.get('window');
+
+type DayKey = keyof ShopOpeningHours;
+
+const DAY_ORDER: Array<{ key: DayKey; label: string }> = [
+    { key: 'monday', label: 'Monday' },
+    { key: 'tuesday', label: 'Tuesday' },
+    { key: 'wednesday', label: 'Wednesday' },
+    { key: 'thursday', label: 'Thursday' },
+    { key: 'friday', label: 'Friday' },
+    { key: 'saturday', label: 'Saturday' },
+    { key: 'sunday', label: 'Sunday' },
+];
+
+const DEFAULT_OPENING_HOURS: ShopOpeningHours = {
+    monday: { open: '09:00', close: '21:00', isClosed: false },
+    tuesday: { open: '09:00', close: '21:00', isClosed: false },
+    wednesday: { open: '09:00', close: '21:00', isClosed: false },
+    thursday: { open: '09:00', close: '21:00', isClosed: false },
+    friday: { open: '09:00', close: '22:00', isClosed: false },
+    saturday: { open: '10:00', close: '23:00', isClosed: false },
+    sunday: { isClosed: true },
+};
+
+const normalizeDay = (day: ShopOpeningHours[DayKey]) => ({
+    open: day?.open || '09:00',
+    close: day?.close || '21:00',
+    isClosed: Boolean(day?.isClosed),
+});
+
+const formatDisplayTime = (time?: string) => {
+    if (!time) {
+        return '—';
+    }
+    const [hourText, minuteText] = time.split(':');
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+    if (Number.isNaN(hour) || Number.isNaN(minute)) {
+        return time;
+    }
+    const suffix = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${String(hour12).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${suffix}`;
+};
 
 const FinalizingDetailsView = () => {
     const navigation = useNavigation<any>();
@@ -32,12 +76,90 @@ const FinalizingDetailsView = () => {
     const [banner, setBanner] = useState<any>(storeBrandingDraft.banner);
     const [description, setDescription] = useState(storeBrandingDraft.description);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [openingHours, setOpeningHours] = useState<ShopOpeningHours>(DEFAULT_OPENING_HOURS);
+    const [loadingHours, setLoadingHours] = useState(false);
+    const [isEditingHours, setIsEditingHours] = useState(false);
+    const [isSavingHours, setIsSavingHours] = useState(false);
+    const hasExistingLogo = Boolean(storeBrandingDraft.logoUploaded);
+    const hasExistingBanner = Boolean(storeBrandingDraft.bannerUploaded);
+
+    useEffect(() => {
+        const loadHours = async () => {
+            if (!authToken) {
+                return;
+            }
+            try {
+                setLoadingHours(true);
+                const response = await fetchShopHoursRequest(authToken);
+                const apiHours = response?.openingHours;
+                if (!apiHours) {
+                    return;
+                }
+                setOpeningHours({
+                    monday: normalizeDay(apiHours.monday || DEFAULT_OPENING_HOURS.monday),
+                    tuesday: normalizeDay(apiHours.tuesday || DEFAULT_OPENING_HOURS.tuesday),
+                    wednesday: normalizeDay(apiHours.wednesday || DEFAULT_OPENING_HOURS.wednesday),
+                    thursday: normalizeDay(apiHours.thursday || DEFAULT_OPENING_HOURS.thursday),
+                    friday: normalizeDay(apiHours.friday || DEFAULT_OPENING_HOURS.friday),
+                    saturday: normalizeDay(apiHours.saturday || DEFAULT_OPENING_HOURS.saturday),
+                    sunday: normalizeDay(apiHours.sunday || DEFAULT_OPENING_HOURS.sunday),
+                });
+            } catch (error) {
+                // keep defaults if API fails
+            } finally {
+                setLoadingHours(false);
+            }
+        };
+
+        loadHours();
+    }, [authToken]);
+
+    const isValidTime = (value?: string) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value || '');
+
+    const validateOpeningHours = () => {
+        for (const dayInfo of DAY_ORDER) {
+            const value = openingHours[dayInfo.key];
+            if (value.isClosed) {
+                continue;
+            }
+            if (!isValidTime(value.open) || !isValidTime(value.close)) {
+                appAlert('Invalid time', `${dayInfo.label} must be in HH:MM format (24-hour), like 09:00 or 21:30.`);
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const saveOpeningHours = async () => {
+        if (!authToken) {
+            appAlert('Session expired', 'Please log in again.');
+            return false;
+        }
+        if (!validateOpeningHours()) {
+            return false;
+        }
+        try {
+            setIsSavingHours(true);
+            await updateShopHoursRequest(authToken, openingHours);
+            return true;
+        } catch (error: any) {
+            appAlert('Hours update failed', error?.message || 'Unable to update opening hours right now.');
+            return false;
+        } finally {
+            setIsSavingHours(false);
+        }
+    };
 
     const pickLogo = async () => {
         try {
             const [file] = await pick({ type: [types.images], copyTo: 'cachesDirectory' });
             const pickedFile: any = file;
             const normalizedFile = { ...pickedFile, uri: pickedFile.fileCopyUri || pickedFile.uri };
+            const imageValidation = validateImageUnderOneMb(normalizedFile);
+            if (!imageValidation.valid) {
+                appAlert('Image too large', imageValidation.message);
+                return;
+            }
             setLogo(normalizedFile);
             saveStoreBrandingDraft({ logo: normalizedFile });
         } catch (err) {
@@ -54,6 +176,11 @@ const FinalizingDetailsView = () => {
             const [file] = await pick({ type: [types.images], copyTo: 'cachesDirectory' });
             const pickedFile: any = file;
             const normalizedFile = { ...pickedFile, uri: pickedFile.fileCopyUri || pickedFile.uri };
+            const imageValidation = validateImageUnderOneMb(normalizedFile);
+            if (!imageValidation.valid) {
+                appAlert('Image too large', imageValidation.message);
+                return;
+            }
             setBanner(normalizedFile);
             saveStoreBrandingDraft({ banner: normalizedFile });
         } catch (err) {
@@ -67,7 +194,7 @@ const FinalizingDetailsView = () => {
 
     const handleFinishSetup = async () => {
         if (!authToken) {
-            Alert.alert('Session expired', 'Please log in again.');
+            appAlert('Session expired', 'Please log in again.');
             return;
         }
 
@@ -75,6 +202,8 @@ const FinalizingDetailsView = () => {
         const logoUri = (logo as any)?.uri;
         const bannerUri = (banner as any)?.uri;
         const fallbackPhone = shopDraft.phone || merchant?.phone || '';
+        const hasLogo = Boolean(logoUri) || hasExistingLogo;
+        const hasBanner = Boolean(bannerUri) || hasExistingBanner;
 
         if (
             !shopDraft.shopName ||
@@ -83,10 +212,10 @@ const FinalizingDetailsView = () => {
             !shopDraft.city ||
             !fallbackPhone ||
             !normalizedDescription ||
-            !logoUri ||
-            !bannerUri
+            !hasLogo ||
+            !hasBanner
         ) {
-            Alert.alert('Incomplete details', 'Please complete shop details, description, logo image and banner image.');
+            appAlert('Incomplete details', 'Please complete shop details, description, logo image and banner image.');
             return;
         }
 
@@ -99,12 +228,20 @@ const FinalizingDetailsView = () => {
                 shopName: shopDraft.shopName,
                 categoryId: shopDraft.categoryId,
                 address: shopDraft.address,
+                address1: shopDraft.address1 || shopDraft.address,
                 city: shopDraft.city,
                 phone: fallbackPhone,
                 description: normalizedDescription,
+                latitude: shopDraft.latitude,
+                longitude: shopDraft.longitude,
                 logoImage: logo,
                 shopBannerImage: banner,
             });
+
+            const isHoursSaved = await saveOpeningHours();
+            if (!isHoursSaved) {
+                return;
+            }
 
             if (response?.merchant) {
                 await updateMerchant(response.merchant);
@@ -113,7 +250,7 @@ const FinalizingDetailsView = () => {
             if (Platform.OS === 'android') {
                 ToastAndroid.show('Shop setup completed successfully', ToastAndroid.SHORT);
             } else {
-                Alert.alert('Success', 'Shop setup completed successfully');
+                appAlert('Success', 'Shop setup completed successfully');
             }
 
             navigation.navigate('MainStack', {
@@ -123,29 +260,75 @@ const FinalizingDetailsView = () => {
                 },
             });
         } catch (error: any) {
-            Alert.alert('Shop update failed', error?.message || 'Unable to save shop details right now.');
+            appAlert('Shop update failed', error?.message || 'Unable to save shop details right now.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const OpeningHoursRow = ({ day, status, open, close }: any) => (
+    const OpeningHoursRow = ({ dayKey, day }: { dayKey: DayKey; day: string }) => (
         <View style={styles.hoursRow}>
             <Text style={styles.hoursDay}>{day}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: status === 'Open' ? '#FFF7ED' : '#F1F5F9' }]}>
-                <Text style={[styles.statusText, { color: status === 'Open' ? colors.orange : colors.lightGray }]}>{status}</Text>
-            </View>
-            <Text style={styles.hoursTime}>{open}</Text>
-            <Text style={styles.hoursTime}>{close}</Text>
+            <TouchableOpacity
+                disabled={!isEditingHours}
+                style={[
+                    styles.statusBadge,
+                    { backgroundColor: openingHours[dayKey].isClosed ? '#F1F5F9' : '#FFF7ED' },
+                ]}
+                onPress={() => {
+                    setOpeningHours((prev) => ({
+                        ...prev,
+                        [dayKey]: {
+                            ...prev[dayKey],
+                            isClosed: !prev[dayKey].isClosed,
+                        },
+                    }));
+                }}
+            >
+                <Text style={[styles.statusText, { color: openingHours[dayKey].isClosed ? colors.lightGray : colors.orange }]}>
+                    {openingHours[dayKey].isClosed ? 'Closed' : 'Open'}
+                </Text>
+            </TouchableOpacity>
+
+            {isEditingHours && !openingHours[dayKey].isClosed ? (
+                <TextInput
+                    value={openingHours[dayKey].open || ''}
+                    onChangeText={(value) =>
+                        setOpeningHours((prev) => ({
+                            ...prev,
+                            [dayKey]: { ...prev[dayKey], open: value.replace(/[^\d:]/g, '').slice(0, 5) },
+                        }))
+                    }
+                    placeholder="09:00"
+                    keyboardType="numbers-and-punctuation"
+                    style={styles.hoursTimeInput}
+                />
+            ) : (
+                <Text style={styles.hoursTime}>
+                    {openingHours[dayKey].isClosed ? '—' : formatDisplayTime(openingHours[dayKey].open)}
+                </Text>
+            )}
+
+            {isEditingHours && !openingHours[dayKey].isClosed ? (
+                <TextInput
+                    value={openingHours[dayKey].close || ''}
+                    onChangeText={(value) =>
+                        setOpeningHours((prev) => ({
+                            ...prev,
+                            [dayKey]: { ...prev[dayKey], close: value.replace(/[^\d:]/g, '').slice(0, 5) },
+                        }))
+                    }
+                    placeholder="21:00"
+                    keyboardType="numbers-and-punctuation"
+                    style={styles.hoursTimeInput}
+                />
+            ) : (
+                <Text style={styles.hoursTime}>
+                    {openingHours[dayKey].isClosed ? '—' : formatDisplayTime(openingHours[dayKey].close)}
+                </Text>
+            )}
         </View>
     );
-
-    const docItems = [
-        { title: 'GST Certificate', subtitle: 'Max size 5MB (PDF, JPG)', icon: 'file-document-outline' },
-        { title: 'Trade License', subtitle: 'Valid till current year', icon: 'file-certificate-outline' },
-        { title: 'Shop Registration', subtitle: 'Gumasta or equivalent', icon: 'storefront-outline' },
-        { title: 'FSSAI License', subtitle: 'Required for food merchants', icon: 'silverware-variant' },
-    ];
 
     return (
         <SafeAreaView style={[styles.container, { paddingTop: safeTop }]}>
@@ -191,10 +374,13 @@ const FinalizingDetailsView = () => {
                                     />
                                 )}
                             </View>
+                            {!logo && hasExistingLogo ? (
+                                <Text style={[styles.uploadHint, { color: '#15803d', marginTop: 8 }]}>Logo already uploaded</Text>
+                            ) : null}
                             <Text style={styles.uploadHint}>Recommended: 500×500px PNG or JPG</Text>
                             <TouchableOpacity style={styles.uploadButton} onPress={pickLogo}>
                                 <Feather name="info" size={16} color="#3B82F6" />
-                                <Text style={styles.uploadButtonText}>Upload logo here</Text>
+                                <Text style={styles.uploadButtonText}>{hasExistingLogo ? 'Change logo' : 'Upload logo here'}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -208,7 +394,7 @@ const FinalizingDetailsView = () => {
                             ) : (
                                 <View style={styles.bannerPlaceholder}>
                                     <MaterialCommunityIcons name="image-outline" size={32} color={colors.orange} />
-                                    <Text style={styles.bannerPlaceholderText}>ADD BANNER</Text>
+                                    <Text style={styles.bannerPlaceholderText}>{hasExistingBanner ? 'BANNER ALREADY UPLOADED' : 'ADD BANNER'}</Text>
                                 </View>
                             )}
                         </TouchableOpacity>
@@ -308,41 +494,33 @@ const FinalizingDetailsView = () => {
                             <Text style={[styles.tableHeaderText, { width: '25%' }]}>Opening{"\n"}Time</Text>
                             <Text style={[styles.tableHeaderText, { width: '25%' }]}>Closing{"\n"}Time</Text>
                         </View>
-                        <OpeningHoursRow day="Monday" status="Open" open="09:00 AM" close="09:00 PM" />
-                        <OpeningHoursRow day="Tuesday" status="Open" open="09:00 AM" close="09:00 PM" />
-                        <OpeningHoursRow day="Wednesday" status="Open" open="09:00 AM" close="09:00 PM" />
-                        <OpeningHoursRow day="Thursday" status="Open" open="09:00 AM" close="09:00 PM" />
-                        <OpeningHoursRow day="Friday" status="Open" open="09:00 AM" close="10:00 PM" />
-                        <OpeningHoursRow day="Saturday" status="Open" open="10:00 AM" close="11:00 PM" />
-                        <OpeningHoursRow day="Sunday" status="Closed" open="—" close="—" />
-
-                        <TouchableOpacity style={styles.editHoursBtn}>
-                            <MaterialCommunityIcons name="calendar-edit" size={16} color={colors.orange} />
-                            <Text style={styles.editHoursText}>Edit Opening Hours</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Business Documents Summary Section */}
-                    <View style={styles.docsSummaryHeader}>
-                        <MaterialCommunityIcons name="briefcase-variant" size={20} color={colors.orange} />
-                        <Text style={[styles.hoursHeaderText, { marginLeft: 10, flex: 1 }]}>Business Documents</Text>
-                        <View style={styles.recommendedBadge}>
-                            <Text style={styles.recommendedText}>RECOMMENDED</Text>
-                        </View>
-                    </View>
-                    <View style={styles.docList}>
-                        {docItems.map((doc, idx) => (
-                            <View key={idx} style={styles.docMiniCard}>
-                                <View style={styles.docIconBox}>
-                                    <MaterialCommunityIcons name={doc.icon as any} size={20} color={colors.darkGray} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.docTitle}>{doc.title}</Text>
-                                    <Text style={styles.docSub}>{doc.subtitle}</Text>
-                                </View>
-                                <MaterialCommunityIcons name="cloud-upload-outline" size={20} color={colors.orange} />
+                        {loadingHours ? (
+                            <View style={styles.hoursLoading}>
+                                <ActivityIndicator color={colors.orange} />
                             </View>
-                        ))}
+                        ) : (
+                            DAY_ORDER.map((item) => <OpeningHoursRow key={item.key} dayKey={item.key} day={item.label} />)
+                        )}
+
+                        <TouchableOpacity
+                            style={styles.editHoursBtn}
+                            onPress={async () => {
+                                if (!isEditingHours) {
+                                    setIsEditingHours(true);
+                                    return;
+                                }
+                                const isSaved = await saveOpeningHours();
+                                if (isSaved) {
+                                    setIsEditingHours(false);
+                                }
+                            }}
+                            disabled={isSavingHours || loadingHours}
+                        >
+                            <MaterialCommunityIcons name="calendar-edit" size={16} color={colors.orange} />
+                            <Text style={styles.editHoursText}>
+                                {isSavingHours ? 'Saving...' : isEditingHours ? 'Save Opening Hours' : 'Edit Opening Hours'}
+                            </Text>
+                        </TouchableOpacity>
                     </View>
 
                     {/* Final Support Banner */}
@@ -691,6 +869,23 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: colors.lightGray,
         textAlign: 'center',
+    },
+    hoursTimeInput: {
+        width: '25%',
+        fontSize: 11,
+        color: colors.darkGray,
+        textAlign: 'center',
+        backgroundColor: colors.white,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 8,
+        paddingVertical: 6,
+        paddingHorizontal: 4,
+    },
+    hoursLoading: {
+        paddingVertical: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     editHoursBtn: {
         flexDirection: 'row',

@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   PermissionsAndroid,
   Platform,
   SafeAreaView,
@@ -16,6 +15,7 @@ import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplet
 import { useNavigation } from '@react-navigation/native';
 import { colors, safeTop } from '../../../helpers/styles';
 import { GOOGLE_MAPS_API_KEY } from '../../../config/maps';
+import { appAlert } from '../../../services/dialogService';
 
 const DEFAULT_REGION: Region = {
   latitude: 18.5204,
@@ -80,7 +80,7 @@ const MapPickerView = () => {
         setCity(findCityFromComponents(firstResult.address_components));
       }
     } catch (error) {
-      Alert.alert('Address error', 'Unable to fetch address for selected location.');
+      appAlert('Address error', 'Unable to fetch address for selected location.');
     } finally {
       setIsResolving(false);
     }
@@ -114,12 +114,12 @@ const MapPickerView = () => {
   const centerToCurrentLocation = async () => {
     const hasPermission = await requestLocationPermission();
     if (!hasPermission) {
-      Alert.alert('Permission required', 'Please allow location access to use current location.');
+      appAlert('Permission required', 'Please allow location access to use current location.');
       return;
     }
 
     if (!userLocation) {
-      Alert.alert('Location not ready', 'We are still fetching your location. Please try again in a moment.');
+      appAlert('Location not ready', 'We are still fetching your location. Please try again in a moment.');
       return;
     }
 
@@ -162,7 +162,7 @@ const MapPickerView = () => {
             components: 'country:in',
           }}
           onFail={(error) => {
-            Alert.alert('Search error', typeof error === 'string' ? error : 'Unable to load address suggestions.');
+            appAlert('Search error', typeof error === 'string' ? error : 'Unable to load address suggestions.');
           }}
           onPress={(data, details = null) => {
             const location = details?.geometry?.location;
@@ -262,7 +262,7 @@ const MapPickerView = () => {
           style={styles.confirmBtn}
           onPress={() => {
             if (!address) {
-              Alert.alert('Address required', 'Please pick a valid map location.');
+              appAlert('Address required', 'Please pick a valid map location.');
               return;
             }
             navigation.navigate({

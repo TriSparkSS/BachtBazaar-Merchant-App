@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     StyleSheet,
     Text,
     View,
@@ -19,6 +18,8 @@ import { useNavigation } from '@react-navigation/native';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import { uploadMerchantDocumentsRequest } from '../../../services/merchantApi';
 import { useAppContext } from '../../../context/AppContext';
+import { appAlert } from '../../../services/dialogService';
+import { validateImageUnderOneMb } from '../../../helpers/fileValidation';
 
 const { width } = Dimensions.get('window');
 
@@ -31,6 +32,15 @@ const MarchantOnBoarding = () => {
     const [panName, setPanName] = useState(personalDocumentDraft.panName || '');
     const [dob, setDob] = useState(personalDocumentDraft.dob || '');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const normalizedDraftNumber = (personalDocumentDraft.documentNumber || '').trim();
+    const normalizedCurrentNumber = documentNumber.trim();
+    const hasExistingUploadedDoc = Boolean(
+        personalDocumentDraft.uploaded &&
+        documentType === personalDocumentDraft.documentType &&
+        normalizedDraftNumber &&
+        normalizedCurrentNumber === normalizedDraftNumber &&
+        !selectedFile?.uri
+    );
 
     const pickDocument = async () => {
         try {
@@ -45,6 +55,12 @@ const MarchantOnBoarding = () => {
                 uri: pickedFile.fileCopyUri || pickedFile.uri,
             };
 
+            const imageValidation = validateImageUnderOneMb(normalizedFile);
+            if (!imageValidation.valid) {
+                appAlert('Image too large', imageValidation.message);
+                return;
+            }
+
             setSelectedFile(normalizedFile);
             savePersonalDocumentDraft({ documentFile: normalizedFile });
         } catch (err) {
@@ -58,22 +74,35 @@ const MarchantOnBoarding = () => {
 
     const handleContinue = async () => {
         if (!authToken) {
-            Alert.alert('Session expired', 'Please login again to continue onboarding.');
+            appAlert('Session expired', 'Please login again to continue onboarding.');
             return;
         }
 
-        if (!documentNumber || !selectedFile?.uri) {
-            Alert.alert('Incomplete details', 'Please enter document number and upload a document image.');
+        if (!documentNumber || (!selectedFile?.uri && !hasExistingUploadedDoc)) {
+            appAlert('Incomplete details', 'Please enter document number and upload a document image.');
             return;
         }
 
-        if (documentType === 'PAN' && (!panName || !dob)) {
-            Alert.alert('Incomplete PAN details', 'Please enter PAN holder name and date of birth.');
+        if (documentType === 'PAN' && (!panName || !dob) && !hasExistingUploadedDoc) {
+            appAlert('Incomplete PAN details', 'Please enter PAN holder name and date of birth.');
             return;
         }
 
         try {
             setIsSubmitting(true);
+
+            if (hasExistingUploadedDoc && !selectedFile?.uri) {
+                await savePersonalDocumentDraft({
+                    documentType: documentType as 'Aadhaar' | 'PAN',
+                    documentNumber: documentNumber.trim(),
+                    panName,
+                    dob,
+                    uploaded: true,
+                });
+                navigation.navigate('EditProfile');
+                return;
+            }
+
             const response = await uploadMerchantDocumentsRequest({
                 token: authToken,
                 documentType: documentType as 'Aadhaar' | 'PAN',
@@ -95,7 +124,7 @@ const MarchantOnBoarding = () => {
 
             navigation.navigate('EditProfile');
         } catch (error: any) {
-            Alert.alert('Upload failed', error?.message || 'Unable to upload personal documents right now.');
+            appAlert('Upload failed', error?.message || 'Unable to upload personal documents right now.');
         } finally {
             setIsSubmitting(false);
         }
@@ -241,16 +270,20 @@ const MarchantOnBoarding = () => {
                         <TouchableOpacity style={styles.uploadBox} onPress={pickDocument}>
                             <View style={styles.uploadIconContainer}>
                                 <MaterialCommunityIcons 
-                                    name={selectedFile ? "file-check-outline" : "camera-plus-outline"} 
+                                    name={selectedFile || hasExistingUploadedDoc ? "file-check-outline" : "camera-plus-outline"} 
                                     size={28} 
-                                    color={selectedFile ? "#10B981" : colors.orange} 
+                                    color={selectedFile || hasExistingUploadedDoc ? "#10B981" : colors.orange} 
                                 />
                             </View>
                             <Text style={styles.uploadTitle}>
-                                {selectedFile ? selectedFile.name : "Click to capture or upload"}
+                                {selectedFile?.name || (hasExistingUploadedDoc ? "Document already uploaded" : "Click to capture or upload")}
                             </Text>
                             <Text style={styles.uploadSubtitle}>
-                                {selectedFile ? "Document selected successfully" : "Front and back combined or separate"}
+                                {selectedFile
+                                    ? "Document selected successfully"
+                                    : hasExistingUploadedDoc
+                                        ? "Using your previously uploaded document"
+                                        : "Front and back combined or separate"}
                             </Text>
                         </TouchableOpacity>
                     </View>

@@ -3,6 +3,7 @@ import Login from './Login';
 import PasswordLogin from './Login/PasswordLoginView';
 import VerifyOTP from './Login/VerifyOTPView';
 import SecureAccount from './Login/SecureAccountView';
+import ForgotPasswordReset from './Login/ForgotPasswordResetView';
 import MerchantOnBoarding from './MerchantOnBoarding/MarchantOnBoarding';
 import EditProfile from './MerchantOnBoarding/EditProfileView';
 import BusinessDocumentation from './MerchantOnBoarding/BusinessDocumentationView';
@@ -16,6 +17,7 @@ export default {
 	PasswordLogin,
 	VerifyOTP,
 	SecureAccount,
+	ForgotPasswordReset,
 	MerchantOnBoarding,
 	EditProfile,
 	BusinessDocumentation,

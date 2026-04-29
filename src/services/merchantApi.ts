@@ -1,6 +1,9 @@
 import { apiRequest, createFilePart } from './apiClient';
 import { Merchant } from './authApi';
+import { validateImageUnderOneMb } from '../helpers/fileValidation';
+import ImageResizer from 'react-native-image-resizer';
 
+const API_ROOT = 'http://bachatbazaar.tech/api';
 const MERCHANT_API_BASE = 'http://bachatbazaar.tech/api/merchant';
 const CATEGORY_API_URL = 'http://bachatbazaar.tech/api/categories';
 const normalizePhoneForApi = (phone: string) => phone.replace(/\D/g, '').slice(-10);
@@ -8,6 +11,11 @@ const normalizePhoneForApi = (phone: string) => phone.replace(/\D/g, '').slice(-
 const compressImageIfNeeded = async (file: any, fallbackName: string) => {
   if (!file?.uri) {
     return file;
+  }
+
+  const imageValidation = validateImageUnderOneMb(file);
+  if (!imageValidation.valid) {
+    throw new Error(imageValidation.message || 'Please select an image smaller than 1 MB.');
   }
 
   const fileType = (file?.type || '').toLowerCase();
@@ -18,11 +26,34 @@ const compressImageIfNeeded = async (file: any, fallbackName: string) => {
     return file;
   }
 
-  return {
-    ...file,
-    name: file?.name || fallbackName,
-    type: file?.type || 'image/jpeg',
-  };
+  try {
+    // Compress before upload to reduce payload and improve API reliability.
+    const resized = await ImageResizer.createResizedImage(
+      file.uri,
+      1280,
+      1280,
+      'JPEG',
+      75,
+      0,
+    );
+
+    return {
+      ...file,
+      uri: resized.uri,
+      path: resized.path,
+      size: resized.size,
+      fileSize: resized.size,
+      name: resized.name || file?.name || fallbackName,
+      type: 'image/jpeg',
+    };
+  } catch (error) {
+    // Fallback to original file if compression fails for any edge case.
+    return {
+      ...file,
+      name: file?.name || fallbackName,
+      type: file?.type || 'image/jpeg',
+    };
+  }
 };
 
 export const updateMerchantProfileRequest = async ({
@@ -111,18 +142,32 @@ export const uploadMerchantDocumentsRequest = async ({
 
 export const uploadBusinessDocumentsRequest = async ({
   token,
-  gstNumber,
-  gstImage,
+  documentType,
+  documentNumber,
+  documentFile,
 }: {
   token: string;
-  gstNumber: string;
-  gstImage: any;
+  documentType: 'GST' | 'PAN' | 'Aadhaar';
+  documentNumber: string;
+  documentFile: any;
 }) => {
   const formData = new FormData();
-  const compressedBusinessDoc = await compressImageIfNeeded(gstImage, 'gst-image.jpg');
+  const fallbackName =
+    documentType === 'PAN' ? 'pan-image.jpg' : documentType === 'Aadhaar' ? 'aadhar-image.jpg' : 'gst-image.jpg';
+  const compressedBusinessDoc = await compressImageIfNeeded(documentFile, fallbackName);
 
-  formData.append('gstNumber', gstNumber);
-  formData.append('gstImage', createFilePart(compressedBusinessDoc, 'gst-image.jpg') as any);
+  if (documentType === 'PAN') {
+    formData.append('panNumber', documentNumber);
+    formData.append('panImage', createFilePart(compressedBusinessDoc, 'pan-image.jpg') as any);
+  } else if (documentType === 'Aadhaar') {
+    formData.append('aadharNumber', documentNumber);
+    formData.append('aadhaarNumber', documentNumber);
+    formData.append('aadharImage', createFilePart(compressedBusinessDoc, 'aadhar-image.jpg') as any);
+    formData.append('aadhaarImage', createFilePart(compressedBusinessDoc, 'aadhar-image.jpg') as any);
+  } else {
+    formData.append('gstNumber', documentNumber);
+    formData.append('gstImage', createFilePart(compressedBusinessDoc, 'gst-image.jpg') as any);
+  }
 
   return apiRequest<{
     success: boolean;
@@ -145,20 +190,96 @@ export type Category = {
   isActive?: boolean;
 };
 
+export type Subcategory = {
+  _id: string;
+  name: string;
+  slug?: string;
+  label?: string;
+  value?: string;
+  isActive?: boolean;
+};
+
+export type ShopHourDayValue = {
+  open?: string;
+  close?: string;
+  isClosed: boolean;
+};
+
+export type ShopOpeningHours = {
+  monday: ShopHourDayValue;
+  tuesday: ShopHourDayValue;
+  wednesday: ShopHourDayValue;
+  thursday: ShopHourDayValue;
+  friday: ShopHourDayValue;
+  saturday: ShopHourDayValue;
+  sunday: ShopHourDayValue;
+};
+
 export const fetchCategoriesRequest = (token: string) =>
   apiRequest<{ success: boolean; count: number; categories: Category[] }>(CATEGORY_API_URL, {
     method: 'GET',
     token,
   });
 
+export const fetchSubcategoriesRequest = (token: string, categoryId: string) =>
+  apiRequest<{ success: boolean; subcategories: Subcategory[]; count?: number }>(
+    `${CATEGORY_API_URL}/${categoryId}/subcategories`,
+    {
+      method: 'GET',
+      token,
+    },
+  );
+
+export const fetchUnifiedProfileRequest = (token: string) =>
+  apiRequest<{
+    success: boolean;
+    profile?: Record<string, any>;
+    user?: Record<string, any>;
+    merchant?: Merchant & Record<string, any>;
+    role?: 'user' | 'merchant';
+  }>(`${API_ROOT}/profile`, {
+    method: 'GET',
+    token,
+  });
+
+export const fetchShopHoursRequest = (token: string) =>
+  apiRequest<{ success: boolean; openingHours: ShopOpeningHours }>(`${MERCHANT_API_BASE}/shop/hours`, {
+    method: 'GET',
+    token,
+  });
+
+export const updateShopHoursRequest = (token: string, openingHours: Partial<ShopOpeningHours>) =>
+  apiRequest<{ success: boolean; openingHours?: ShopOpeningHours; message?: string }>(`${MERCHANT_API_BASE}/shop/hours`, {
+    method: 'PUT',
+    body: openingHours,
+    token,
+  });
+
+export const patchSingleShopHourRequest = (
+  token: string,
+  day: keyof ShopOpeningHours,
+  value: ShopHourDayValue,
+) =>
+  apiRequest<{ success: boolean; openingHours?: ShopOpeningHours; message?: string }>(
+    `${MERCHANT_API_BASE}/shop/hours/${day}`,
+    {
+      method: 'PATCH',
+      body: value,
+      token,
+    },
+  );
+
 export const updateMerchantShopRequest = async ({
   token,
   shopName,
   categoryId,
   address,
+  address1,
   city,
   phone,
   description,
+  latitude,
+  longitude,
   logoImage,
   shopBannerImage,
 }: {
@@ -166,24 +287,39 @@ export const updateMerchantShopRequest = async ({
   shopName: string;
   categoryId: string;
   address: string;
+  address1?: string;
   city: string;
   phone: string;
   description: string;
-  logoImage: any;
-  shopBannerImage: any;
+  latitude?: number;
+  longitude?: number;
+  logoImage?: any;
+  shopBannerImage?: any;
 }) => {
   const formData = new FormData();
   formData.append('shopName', shopName);
   formData.append('categoryId', categoryId);
   formData.append('address', address);
+  formData.append('address1', address1 || address);
   formData.append('city', city);
   formData.append('phone', normalizePhoneForApi(phone));
   formData.append('description', description);
+  if (typeof latitude === 'number') {
+    formData.append('latitude', String(latitude));
+  }
+  if (typeof longitude === 'number') {
+    formData.append('longitude', String(longitude));
+  }
 
-  const compressedLogo = await compressImageIfNeeded(logoImage, 'shop-logo.jpg');
-  const compressedBanner = await compressImageIfNeeded(shopBannerImage, 'shop-banner.jpg');
-  formData.append('logoImage', createFilePart(compressedLogo, 'shop-logo.jpg') as any);
-  formData.append('shopBannerImage', createFilePart(compressedBanner, 'shop-banner.jpg') as any);
+  if (logoImage?.uri) {
+    const compressedLogo = await compressImageIfNeeded(logoImage, 'shop-logo.jpg');
+    formData.append('logoImage', createFilePart(compressedLogo, 'shop-logo.jpg') as any);
+  }
+
+  if (shopBannerImage?.uri) {
+    const compressedBanner = await compressImageIfNeeded(shopBannerImage, 'shop-banner.jpg');
+    formData.append('shopBannerImage', createFilePart(compressedBanner, 'shop-banner.jpg') as any);
+  }
 
   return apiRequest<{ success: boolean; message: string; merchant?: Merchant }>(`${MERCHANT_API_BASE}/shop`, {
     method: 'PUT',

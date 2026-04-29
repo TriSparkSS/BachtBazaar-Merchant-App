@@ -1,4 +1,4 @@
-import { ActivityIndicator, Alert, StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Dimensions, InteractionManager, Platform } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, View, Image, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Dimensions, InteractionManager, Platform } from 'react-native'
 import React, { useRef, useState, useEffect } from 'react'
 import Feather from 'react-native-vector-icons/Feather';
 import { colors, screenWidth } from '../../../helpers/styles';
@@ -8,6 +8,7 @@ import { navigationRef } from '../../../navigation';
 import { resendPhoneOtp, verifyPhoneOtp } from '../../../services/firebasePhoneAuth';
 import { loginOtpRequest, verifySignupOtpRequest } from '../../../services/authApi';
 import { useAppContext } from '../../../context/AppContext';
+import { appAlert } from '../../../services/dialogService';
 
 /** Defer navigation until after Modal close / layout (avoids failed transitions). */
 const afterModalNavigate = (go: () => void) => {
@@ -53,7 +54,7 @@ const VerifyOTPView = () => {
         const code = otp;
 
         if (code.length !== 6) {
-            Alert.alert('Invalid OTP', 'Please enter the 6-digit code sent to your phone.');
+            appAlert('Invalid OTP', 'Please enter the 6-digit code sent to your phone.');
             return;
         }
 
@@ -75,12 +76,31 @@ const VerifyOTPView = () => {
                 return;
             }
 
-            const response = await loginOtpRequest(firebaseIdToken);
-            await setSession(response.token, response.merchant);
+            if (flow === 'forgot') {
+                navigation.navigate('ForgotPasswordReset', {
+                    otpToken: firebaseIdToken,
+                    phoneNumber,
+                });
+                return;
+            }
 
+            const response = await loginOtpRequest(firebaseIdToken);
+            const sessionStatus = await setSession(response.token, response.merchant);
+            if (sessionStatus.isComplete) {
+                if (!navigationRef.isReady()) {
+                    return;
+                }
+                navigationRef.dispatch(
+                    CommonActions.reset({
+                        index: 0,
+                        routes: [{ name: 'MainStack' }],
+                    })
+                );
+                return;
+            }
             setShowSuccess(true);
         } catch (error: any) {
-            Alert.alert('Verification failed', error?.message || 'The OTP is incorrect or expired. Please try again.');
+            appAlert('Verification failed', error?.message || 'The OTP is incorrect or expired. Please try again.');
         } finally {
             setIsVerifying(false);
         }
@@ -93,7 +113,7 @@ const VerifyOTPView = () => {
             setOtp('');
             setTimer(45);
         } catch (error: any) {
-            Alert.alert('Resend failed', error?.message || 'Unable to resend OTP right now.');
+            appAlert('Resend failed', error?.message || 'Unable to resend OTP right now.');
         } finally {
             setIsResending(false);
         }
