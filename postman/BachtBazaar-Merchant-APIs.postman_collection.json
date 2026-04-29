@@ -1,0 +1,172 @@
+{
+  "info": {
+    "name": "BachtBazaar Merchant APIs",
+    "description": "Collection for subcategory, KYC, profile, shop hours, merchant shop, and business document endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://bachatbazaar.tech" },
+    { "key": "token", "value": "" },
+    { "key": "categoryId", "value": "" },
+    { "key": "day", "value": "monday" }
+  ],
+  "item": [
+    {
+      "name": "Categories - Get Subcategories",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/categories/{{categoryId}}/subcategories",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "categories", "{{categoryId}}", "subcategories"]
+        },
+        "description": "Returns dynamic subcategories for selected category."
+      }
+    },
+    {
+      "name": "KYC - Cashfree Verify",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"aadhaarNumber\": \"123412341234\",\n  \"aadharNumber\": \"123412341234\",\n  \"panNumber\": \"ABCDE1234F\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/kyc/verify",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "kyc", "verify"]
+        },
+        "description": "Cashfree passthrough. Backend should return exact Cashfree response."
+      }
+    },
+    {
+      "name": "Profile - Unified",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/profile",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "profile"]
+        },
+        "description": "Returns user or merchant profile based on JWT."
+      }
+    },
+    {
+      "name": "Shop Hours - Get",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/merchant/shop/hours",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "merchant", "shop", "hours"]
+        },
+        "description": "Returns opening/closing hours for all 7 days."
+      }
+    },
+    {
+      "name": "Shop Hours - Update Multiple Days",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"monday\": { \"open\": \"09:00\", \"close\": \"21:00\", \"isClosed\": false },\n  \"tuesday\": { \"open\": \"09:00\", \"close\": \"21:00\", \"isClosed\": false },\n  \"sunday\": { \"isClosed\": true }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/merchant/shop/hours",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "merchant", "shop", "hours"]
+        },
+        "description": "Updates multiple day timings in one request."
+      }
+    },
+    {
+      "name": "Shop Hours - Update Single Day",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"open\": \"10:00\",\n  \"close\": \"20:00\",\n  \"isClosed\": false\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/merchant/shop/hours/{{day}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "merchant", "shop", "hours", "{{day}}"]
+        },
+        "description": "Updates only one day (example: monday)."
+      }
+    },
+    {
+      "name": "Merchant Shop - Upsert (Address + Coordinates)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "shopName", "value": "BachtBazaar Electronics", "type": "text" },
+            { "key": "categoryId", "value": "{{categoryId}}", "type": "text" },
+            { "key": "address", "value": "MG Road", "type": "text" },
+            { "key": "address1", "value": "MG Road, Pune, Maharashtra", "type": "text" },
+            { "key": "city", "value": "Pune", "type": "text" },
+            { "key": "phone", "value": "9876543210", "type": "text" },
+            { "key": "description", "value": "Trusted electronics store", "type": "text" },
+            { "key": "latitude", "value": "18.5204", "type": "text" },
+            { "key": "longitude", "value": "73.8567", "type": "text" },
+            { "key": "logoImage", "type": "file", "src": "" },
+            { "key": "shopBannerImage", "type": "file", "src": "" }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/merchant/shop",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "merchant", "shop"]
+        },
+        "description": "Create/update shop with address1, latitude and longitude."
+      }
+    },
+    {
+      "name": "Business Docs - PAN Upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "panNumber", "value": "ABCDE1234F", "type": "text" },
+            { "key": "panImage", "type": "file", "src": "" }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/merchant/business-docs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "merchant", "business-docs"]
+        },
+        "description": "PAN number + PAN image upload for business-docs API."
+      }
+    }
+  ]
+}
